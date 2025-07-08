@@ -1,0 +1,503 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  USER
+  DRIVER
+  PARTNER
+  LIVREUR
+}
+
+enum TripStatus {
+  PENDING
+  VALIDATED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  STARTED
+}
+
+enum OrderStatus {
+  PENDING
+  VALIDATED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+enum PaymentMethod {
+  IMMEDIATE
+  ON_ARRIVAL
+  MOBILE_MONEY // ✅ Ajouté
+  CARD // ✅ Ajouté
+  BANK_TRANSFER // ✅ Ajouté
+}
+
+enum TransactionType {
+  DEPOSIT
+  PAYMENT
+  COMMISSION
+  REFUND
+}
+
+enum VehicleType {
+  ECONOMIQUE
+  CONFORT
+  LUXE
+  UTILITAIRE
+}
+
+enum UserStatus {
+  INACTIVE
+  ACTIVE
+  BLOCKED
+}
+
+enum ServiceType {
+  DELIVERY
+  ECOMMERCE
+  RESTAURANT
+}
+
+enum DeliveryStatus {
+  PENDING
+  IN_PROGRESS
+  DELIVERED
+  CANCELLED
+  ASSIGNED
+}
+
+enum DeliveryAssignmentStatus {
+  PENDING // En attente d’acceptation
+  ACCEPTED // Acceptée par le livreur
+  REJECTED // Refusée par le livreur
+  COMPLETED // Livraison terminée
+}
+
+enum VariantType {
+  TAILLE
+  COULEUR
+  CAPACITE
+  POIDS
+  LONGUEUR
+  LARGEUR
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum NotificationType {
+  SMS
+  EMAIL
+  PUSH
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+  VALIDATED
+}
+
+model User {
+  id                   String                @id @default(uuid())
+  email                String                @unique
+  password             String
+  passwordGenerate     String?               // 👈 Champ ajouté
+  name                 String
+  role                 Role
+  status               UserStatus            @default(INACTIVE)
+  phoneCountryCode     String?
+  phoneNumber          String?               @unique
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  // Wallet
+  wallet               Wallet?
+  // Véhicules et trajets
+  vehiclesOwned        Vehicle[]             @relation("PartnerVehicles")
+  vehiclesDriven       Vehicle[]             @relation("DriverVehicles")
+  trips                Trip[]                @relation("CreatedTrips")
+  tripsAsDriver        Trip[]                @relation("DriverTrips")
+  // Partenaires / chauffeurs
+  partnerId            String?
+  partner              User?                 @relation("PartnerDrivers", fields: [partnerId], references: [id])
+  drivers              User[]                @relation("PartnerDrivers")
+  // Transactions
+  transactions         Transaction[]
+  // Services
+  services             Service[]             @relation("PartnerServices")
+  serviceSubscriptions ServiceSubscription[]
+  // Commandes générales (trajets)
+  orders               Order[]
+
+  // E-commerce
+  ecommerceOrders       EcommerceOrder[]
+  addedProducts         Product[]         @relation("AddedByProduct")
+  addedVariants         Variant[]         @relation("AddedByVariant")
+  addedCategories       Category[]        @relation("AddedByCategory")
+  addedEcommerceOrders  EcommerceOrder[]  @relation("AddedByEcommerceOrder")
+  // Restaurant
+  restaurantOrders      RestaurantOrder[]
+  addedMenuItems        MenuItem[]        @relation("AddedByMenuItem")
+  addedRestaurantOrders RestaurantOrder[] @relation("AddedByRestaurantOrder")
+  // Livraisons demandées par l’utilisateur
+  deliveriesAsCustomer  Delivery[]        @relation("CustomerDeliveries")
+  // Livraisons que l’utilisateur livre (seulement si role DRIVER, PARTNER, LIVREUR, ADMIN)
+  deliveriesAsDriver    Delivery[]        @relation("DeliveryDriver")
+  // Relations d’ajouts
+  addedDeliveries       Delivery[]        @relation("AddedByDelivery")
+
+  DeliveryAssignment DeliveryAssignment[]
+  notifications      Notification[]
+}
+
+model Wallet {
+  id            String        @id @default(uuid())
+  balance       Int           @default(0)
+  user          User          @relation(fields: [userId], references: [id])
+  userId        String        @unique
+  transactions  Transaction[]
+  paymentMethod PaymentMethod @default(MOBILE_MONEY)
+  rechargeType  String        @default("WAVE")
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @default(now()) @updatedAt
+  accountNumber  String        @unique        // Numéro de compte unique
+
+}
+
+model Transaction {
+  id          String          @id @default(uuid())
+  amount      Int
+  type        TransactionType
+  walletId    String
+  wallet      Wallet          @relation(fields: [walletId], references: [id])
+  userId      String // ✅ Ajouté pour tracer l’utilisateur concerné
+  user        User            @relation(fields: [userId], references: [id])
+  reference   String? // ✅ Ex: ID de commande, ID de trajet...
+  description String? // ✅ Ex: "Commission 18% prélevée pour la commande XYZ"
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @default(now()) @updatedAt
+}
+
+model Vehicle {
+  id           String      @id @default(uuid()) // Identifiant unique du véhicule
+  name         String // Nom personnalisé du véhicule
+  brand        String // Marque du véhicule (ex: Toyota, Renault)
+  capacity     Int // Capacité maximale de passagers
+  fuel         String // Type de carburant (essence, diesel, etc.)
+  color        String // Couleur du véhicule
+  model        String // Modèle du véhicule (ex: Clio, Corolla)
+  registration String // Numéro d'immatriculation (carte grise)
+  licensePlate String // Plaque d'immatriculation visible
+  serialNumber String // Numéro de série du véhicule (châssis)
+  type         VehicleType // Type de véhicule (Économique, Confort, etc.)
+  partnerId    String // Référence vers le propriétaire (Partenaire)
+  partner      User        @relation("PartnerVehicles", fields: [partnerId], references: [id])
+  drivers      User[]      @relation("DriverVehicles") // Conducteurs assignés à ce véhicule
+  trips        Trip[] // Trajets associés à ce véhicule
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @default(now()) @updatedAt
+}
+
+model Trip {
+  id                 String      @id @default(uuid())
+  createdById        String
+  driverId           String
+  vehicleId          String
+  departure          String
+  departureLatitude  Float
+  departureLongitude Float
+  arrival            String
+  arrivalLatitude    Float
+  arrivalLongitude   Float
+  date               DateTime
+  departureTime      String? // <= à ajouter
+  arrivalTime        String? // <= à ajouter
+  estimatedArrival   DateTime
+  availableSeats     Int
+  distance           Float?
+  price              Float? // ✅ Nouveau champ
+  description        String?
+  instructions       String?
+  status             TripStatus  @default(PENDING)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  createdBy          User        @relation("CreatedTrips", fields: [createdById], references: [id])
+  driver             User        @relation("DriverTrips", fields: [driverId], references: [id])
+  vehicle            Vehicle     @relation(fields: [vehicleId], references: [id])
+  stopPoints         StopPoint[]
+  orders             Order[]
+}
+
+model StopPoint {
+  id        String   @id @default(uuid())
+  tripId    String
+  trip      Trip     @relation(fields: [tripId], references: [id])
+  label     String?
+  latitude  Float
+  longitude Float
+  order     Int
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+}
+
+model Order {
+  id            String        @id @default(uuid())
+  orderNumber   String        @unique // 🆕 Numéro unique de commande
+  userId        String
+  tripId        String
+  user          User          @relation(fields: [userId], references: [id])
+  trip          Trip          @relation(fields: [tripId], references: [id])
+  status        OrderStatus   @default(PENDING)
+  paymentMethod PaymentMethod
+  amount        Float? // ✅ Le montant à payer (copié du prix du trip)
+  canceledAt    DateTime? // ✅ Nouveau champ ajouté
+  createdAt     DateTime      @default(now())
+  completedAt   DateTime? // ✅ Nouveau champ ajouté
+  updatedAt     DateTime      @default(now()) @updatedAt
+}
+
+model Service {
+  id            String                @id @default(uuid())
+  name          String
+  description   String?
+  type          ServiceType
+  imageUrl      String?
+  icon            String?               // <-- Ajouté ici
+  // UUID du user créateur du service
+  partnerId     String
+  partner       User                  @relation("PartnerServices", fields: [partnerId], references: [id])
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  products      Product[]
+  menuItems     MenuItem[]
+  deliveries    Delivery[]
+  subscriptions ServiceSubscription[]
+  // Champs ajoutés
+  price           Float                 @default(0)
+  promoPrice      Float                 @default(0)
+  isActivePromo   Boolean               @default(false)
+  statusService   Boolean               @default(true)
+
+}
+
+model ServiceSubscription {
+  id           String   @id @default(uuid())
+  userId       String
+  serviceId    String
+  subscribedAt DateTime @default(now())
+  startDate    DateTime
+  endDate      DateTime
+  status       SubscriptionStatus @default(ACTIVE)
+  user         User     @relation(fields: [userId], references: [id])
+  service      Service  @relation(fields: [serviceId], references: [id])
+
+  @@index([userId, serviceId])
+}
+
+model Product {
+  id                 String               @id @default(uuid())
+  name               String
+  description        String?
+  price              Float
+  stock              Int
+  sku                String               @unique
+  imageUrl           String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  categoryId         String
+  category           Category             @relation(fields: [categoryId], references: [id])
+  serviceId          String
+  service            Service              @relation(fields: [serviceId], references: [id])
+  addedById          String
+  addedBy            User                 @relation("AddedByProduct", fields: [addedById], references: [id])
+  EcommerceOrderItem EcommerceOrderItem[]
+  // Variants assignés via la table pivot
+  variants ProduitListeVariante[]
+}
+
+model Variant {
+  id          String                 @id @default(uuid())
+  name        String // Ex: "Taille"
+  value       String // Ex: "M"
+  price       Float?
+  variantType VariantType
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  produits    ProduitListeVariante[]
+
+  addedById String
+  addedBy   User   @relation("AddedByVariant", fields: [addedById], references: [id]) // 🔁 relation manquante
+}
+
+model ProduitListeVariante {
+  productId String
+  variantId String
+  product   Product @relation(fields: [productId], references: [id])
+  variant   Variant @relation(fields: [variantId], references: [id])
+  @@id([productId, variantId])
+}
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String
+  products  Product[]
+  addedById String
+  addedBy   User      @relation("AddedByCategory", fields: [addedById], references: [id])
+}
+
+model MenuItem {
+  id          String   @id @default(uuid())
+  name        String
+  price       Int
+  imageUrl    String?
+  isAvailable Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  serviceId   String
+  service     Service  @relation(fields: [serviceId], references: [id])
+  addedById   String
+  addedBy     User     @relation("AddedByMenuItem", fields: [addedById], references: [id])
+
+  RestaurantOrderItem RestaurantOrderItem[]
+}
+
+model Delivery {
+  id            String               @id @default(uuid())
+  pickupAddress String
+  pickupLat     Float?
+  pickupLng     Float?
+  dropAddress   String
+  dropLat       Float?
+  dropLng       Float?
+  description   String?
+  scheduledAt   DateTime?
+  status        DeliveryStatus       @default(PENDING)
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  service       Service?             @relation(fields: [serviceId], references: [id])
+  serviceId     String
+  customerId    String
+  customer      User                 @relation("CustomerDeliveries", fields: [customerId], references: [id])
+  // driverId reste ici pour livreur actif (nullable)
+  driverId      String?
+  driver        User?                @relation("DeliveryDriver", fields: [driverId], references: [id])
+  addedById     String
+  addedBy       User                 @relation("AddedByDelivery", fields: [addedById], references: [id])
+  packages      Package[]            @relation("DeliveryPackages")
+  assignments   DeliveryAssignment[] // Historique des acceptations/refus etc
+}
+
+model Package {
+  id          String   @id @default(uuid())
+  name        String?
+  deliveryId  String
+  delivery    Delivery @relation("DeliveryPackages", fields: [deliveryId], references: [id])
+  description String?
+  weight      Float?
+  length      Float?
+  width       Float?
+  height      Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model DeliveryAssignment {
+  id          String                   @id @default(uuid())
+  deliveryId  String
+  delivery    Delivery                 @relation(fields: [deliveryId], references: [id])
+  driverId    String
+  driver      User                     @relation(fields: [driverId], references: [id])
+  status      DeliveryAssignmentStatus @default(PENDING) // ex: PENDING, ACCEPTED, REJECTED, COMPLETED
+  acceptedAt  DateTime?
+  completedAt DateTime?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+}
+
+model EcommerceOrder {
+  id            String               @id @default(uuid())
+  userId        String
+  status        OrderStatus          @default(PENDING)
+  paymentMethod PaymentMethod
+  amount        Float?
+  canceledAt    DateTime?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  user          User                 @relation(fields: [userId], references: [id])
+  items         EcommerceOrderItem[]
+  addedById     String
+  addedBy       User                 @relation("AddedByEcommerceOrder", fields: [addedById], references: [id])
+}
+
+model EcommerceOrderItem {
+  id               String         @id @default(uuid())
+  ecommerceOrderId String
+  ecommerceOrder   EcommerceOrder @relation(fields: [ecommerceOrderId], references: [id])
+  productId        String
+  product          Product        @relation(fields: [productId], references: [id])
+  quantity         Int            @default(1)
+  price            Float
+}
+
+model RestaurantOrder {
+  id            String                @id @default(uuid())
+  userId        String
+  status        OrderStatus           @default(PENDING)
+  paymentMethod PaymentMethod
+  amount        Float?
+  canceledAt    DateTime?
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+  user          User                  @relation(fields: [userId], references: [id])
+  items         RestaurantOrderItem[]
+  addedById     String
+  addedBy       User                  @relation("AddedByRestaurantOrder", fields: [addedById], references: [id])
+}
+
+model RestaurantOrderItem {
+  id                String          @id @default(uuid())
+  restaurantOrderId String
+  menuItemId        String
+  quantity          Int             @default(1)
+  price             Float
+  restaurantOrder   RestaurantOrder @relation(fields: [restaurantOrderId], references: [id])
+  menuItem          MenuItem        @relation(fields: [menuItemId], references: [id])
+}
+
+model FileManager {
+  id           Int      @id @default(autoincrement())
+  fileCode     String   @unique
+  fileName     String
+  fileMimeType String
+  fileSize     Int
+  fileUrl      String
+  fileType     String // Ex : 'userFiles', 'vehicleFiles', 'menuItemFiles'
+  targetId     String // UUID de l’élément lié
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now()) @updatedAt
+}
+
+model Notification {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  type          NotificationType
+  subject       String
+  content       String
+  status        NotificationStatus @default(PENDING)
+  contact       String?
+  email         String?
+  pushOptions   Json? // pour stocker les options push (deviceId, etc.)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now()) @updatedAt
+}
