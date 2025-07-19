@@ -108,6 +108,22 @@ enum NotificationStatus {
   VALIDATED
 }
 
+// Méthodes de livraison
+enum DeliveryMethod {
+  HOME_DELIVERY
+  STORE_PICKUP
+  LIFT
+  PICKUP
+  DROP
+}
+
+// Type de message
+enum MessageSender {
+  user
+  support
+}
+
+
 model User {
   id                   String                @id @default(uuid())
   email                String                @unique
@@ -158,6 +174,9 @@ model User {
 
   DeliveryAssignment DeliveryAssignment[]
   notifications      Notification[]
+
+  messagesSent Message[] @relation("UserMessages")
+
 }
 
 model Wallet {
@@ -177,6 +196,7 @@ model Wallet {
 model Transaction {
   id          String          @id @default(uuid())
   amount      Int
+  transactionNumber  String?          @unique // 🆕 Optionnel avec @unique
   type        TransactionType
   walletId    String
   wallet      Wallet          @relation(fields: [walletId], references: [id])
@@ -426,9 +446,12 @@ model DeliveryAssignment {
 
 model EcommerceOrder {
   id            String               @id @default(uuid())
+  ordersNumber   String               @unique // 🆕 Numéro unique de commande
   userId        String
   status        OrderStatus          @default(PENDING)
   paymentMethod PaymentMethod
+  // Méthodes de livraison
+  deliveryMethod DeliveryMethod
   amount        Float?
   canceledAt    DateTime?
   createdAt     DateTime             @default(now())
@@ -501,3 +524,26 @@ model Notification {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @default(now()) @updatedAt
 }
+
+model Message {
+  id           String     @id @default(uuid()) // UUID comme identifiant principal
+  text         String?
+  imageUrl     String?
+  timestamp    DateTime   @default(now())
+  sender       MessageSender
+
+  senderId     String
+  senderUser   User       @relation("UserMessages", fields: [senderId], references: [id])
+
+  repliedToId  String?    // doit être String pour matcher l'id de Message
+  repliedTo    Message?   @relation("ReplyTo", fields: [repliedToId], references: [id])
+  replies      Message[]  @relation("ReplyTo")
+
+  lastOrderId  String?    // UUID d'un Trip, EcommerceOrder ou Delivery (nullable)
+
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+}
+
+
+

@@ -6,6 +6,7 @@ import { BaseResponse } from 'src/dto/request/base-response.dto';
 import { ServiceType } from '@prisma/client';
 import { FunctionService, PaginateOptions } from 'src/utils/pagination.service';
 import { PaginationParamsDto } from 'src/dto/request/pagination-params.dto';
+import { startOfMonth, endOfMonth, subMonths, format } from 'date-fns';
 
 @Injectable()
 export class ProductService {
@@ -14,6 +15,35 @@ export class ProductService {
         private readonly cloudinary: CloudinaryService,
         private readonly functionService: FunctionService,
     ) { }
+
+
+
+
+    private async generateUniqueSku(name: string): Promise<string> {
+        const baseSku = name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').substring(0, 20);
+
+        let sku: string;
+        let exists = true;
+        let counter = 0;
+
+        do {
+            const suffix = Date.now().toString().slice(-5) + (counter > 0 ? `-${counter}` : '');
+            sku = `${baseSku}-${suffix}`;
+
+            const existingProduct = await this.prisma.product.findUnique({
+                where: { sku },
+            });
+
+            exists = !!existingProduct;
+            counter++;
+        } while (exists && counter < 10); // pour éviter boucle infinie
+
+        if (exists) {
+            throw new Error('Impossible de générer un SKU unique après plusieurs tentatives.');
+        }
+
+        return sku;
+    }
 
     async createProduct(dto: CreateProductDto, userId: string): Promise<BaseResponse<{ productId: string }>> {
 
@@ -48,6 +78,8 @@ export class ProductService {
             const uploadResult = await this.cloudinary.uploadFile(imageFile.buffer, 'products');
             imageUrl = uploadResult.fileUrl;
         }
+        // Génération automatique du SKU
+        const sku = await this.generateUniqueSku(productData.name);
 
         // 3. Création du produit
         const product = await this.prisma.product.create({
@@ -55,7 +87,7 @@ export class ProductService {
                 // on étale uniquement les champs autorisés
                 name: productData.name,
                 description: productData.description,
-                sku: productData.sku,
+                sku: sku,
                 imageUrl,
                 price: priceNumber,
                 stock: stockNumber,
@@ -71,9 +103,39 @@ export class ProductService {
             },
         });
 
-        if (variantIds && variantIds.length > 0) {
+        // if (variantIds && variantIds.length > 0) {
+        //     await this.prisma.produitListeVariante.createMany({
+        //         data: variantIds.map((variantId) => ({
+        //             productId: product.id,
+        //             variantId,
+        //         })),
+        //         skipDuplicates: true,
+        //     });
+        // }
+
+          // 6. Traitement des variantes (parser CSV s'il le faut)
+        let parsedVariantIds: string[] = [];
+
+        if (typeof variantIds === 'string') {
+            parsedVariantIds = variantIds.split(',').map((id) => id.trim());
+        } else if (Array.isArray(variantIds)) {
+            parsedVariantIds = variantIds;
+        }
+
+        if (parsedVariantIds.length > 0) {
+            const existingVariants = await this.prisma.variant.findMany({
+                where: { id: { in: parsedVariantIds } },
+                select: { id: true },
+            });
+
+            const validVariantIds = existingVariants.map((v) => v.id);
+
+            if (validVariantIds.length !== parsedVariantIds.length) {
+                throw new BadRequestException("Une ou plusieurs variantes sont invalides.");
+            }
+
             await this.prisma.produitListeVariante.createMany({
-                data: variantIds.map((variantId) => ({
+                data: validVariantIds.map((variantId) => ({
                     productId: product.id,
                     variantId,
                 })),
@@ -297,6 +359,8 @@ export class ProductService {
             },
             selectAndInclude: {
                 include: {
+                    category: true,
+                    addedBy: true,
                     service: true,
                     variants: { include: { variant: true } },
                 },
@@ -464,6 +528,161 @@ export class ProductService {
 
     //     return new BaseResponse(200, 'Tous les produits admin avec images', productsWithFiles);
     // }
+
+
+    async getUserProductStats(userId: string): Promise<BaseResponse<any>> {
+        const [productCount, totalStock, totalSold, orderCount] = await Promise.all([
+            // Nombre total de produits créés par l'utilisateur
+            this.prisma.product.count({
+                where: {
+                    addedById: userId,
+                },
+            }),
+            // Stock total de tous les produits de l'utilisateur
+            this.prisma.product.aggregate({
+                where: {
+                    addedById: userId,
+                },
+                _sum: {
+                    stock: true,
+                },
+            }),
+            // Total des produits vendus (quantité) dans les commandes complétées
+            this.prisma.ecommerceOrderItem.aggregate({
+                where: {
+                    ecommerceOrder: {
+                        status: 'COMPLETED',
+                    },
+                    product: {
+                        addedById: userId,
+                    },
+                },
+                _sum: {
+                    quantity: true,
+                },
+            }),
+            // Nombre de commandes distinctes contenant les produits de l'utilisateur
+            this.prisma.ecommerceOrder.count({
+                where: {
+                    items: {
+                        some: {
+                            product: {
+                                addedById: userId,
+                            },
+                        },
+                    },
+                },
+            }),
+        ]);
+
+        return new BaseResponse(200, 'Statistiques des produits de l’utilisateur', {
+            totalProducts: productCount,
+            totalStock: totalStock._sum.stock || 0,
+            totalOrders: orderCount,
+            totalSoldProducts: totalSold._sum.quantity || 0,
+        });
+    }
+
+    async getGlobalProductStats(): Promise<BaseResponse<any>> {
+        const [productCount, totalStock, totalSold, orderCount] = await Promise.all([
+            // Nombre total de produits dans le système
+            this.prisma.product.count(),
+            // Stock total de tous les produits
+            this.prisma.product.aggregate({
+                _sum: {
+                    stock: true,
+                },
+            }),
+            // Total des produits vendus (quantité) dans les commandes complétées
+            this.prisma.ecommerceOrderItem.aggregate({
+                where: {
+                    ecommerceOrder: {
+                        status: 'COMPLETED',
+                    },
+                },
+                _sum: {
+                    quantity: true,
+                },
+            }),
+            // Nombre total de commandes contenant au moins un produit
+            this.prisma.ecommerceOrder.count({
+                where: {
+                    items: {
+                        some: {}, // commande avec au moins un item
+                    },
+                },
+            }),
+        ]);
+
+        return new BaseResponse(200, 'Statistiques globales des produits', {
+            totalProducts: productCount,
+            totalStock: totalStock._sum.stock || 0,
+            totalOrders: orderCount,
+            totalSoldProducts: totalSold._sum.quantity || 0,
+        });
+    }
+
+
+    async getOrdersAndRevenueStats(startDate?: Date, endDate?: Date): Promise<BaseResponse<any>> {
+        const end = endDate ? new Date(endDate) : new Date();
+        const start = startDate ? new Date(startDate) : subMonths(end, 11);
+
+        const months: string[] = [];
+        const ordersData: number[] = [];
+        const revenueData: number[] = [];
+
+        const current = new Date(start);
+        while (current <= end) {
+            months.push(format(current, 'yyyy-MM'));
+            current.setMonth(current.getMonth() + 1);
+        }
+
+        const orders = await this.prisma.ecommerceOrder.findMany({
+            where: {
+                status: 'COMPLETED',
+                createdAt: {
+                    gte: startOfMonth(start),
+                    lte: endOfMonth(end),
+                },
+            },
+            select: {
+                amount: true,
+                createdAt: true,
+            },
+        });
+
+        const grouped = new Map<string, { orders: number; revenue: number }>();
+        for (const order of orders) {
+            const key = format(order.createdAt, 'yyyy-MM');
+            if (!grouped.has(key)) {
+                grouped.set(key, { orders: 0, revenue: 0 });
+            }
+            const current = grouped.get(key)!;
+            current.orders += 1;
+            current.revenue += order.amount ?? 0;
+        }
+
+        // 🔁 Réorganiser les mois dans l'ordre de janvier à décembre
+        const merged = months.map((label) => ({
+            label,
+            monthNumber: parseInt(label.split('-')[1], 10), // extrait le mois (ex: '2025-01' → 1)
+            orders: grouped.get(label)?.orders ?? 0,
+            revenue: grouped.get(label)?.revenue ?? 0,
+        }));
+
+        merged.sort((a, b) => a.monthNumber - b.monthNumber); // ordre Jan → Déc
+
+        const sortedLabels = merged.map((item) => item.label);
+        const sortedOrders = merged.map((item) => item.orders);
+        const sortedRevenue = merged.map((item) => item.revenue);
+
+        return new BaseResponse(200, 'Statistiques commandes et revenus par mois (triés Janv → Déc)', {
+            labels: sortedLabels,
+            orders: sortedOrders,
+            revenue: sortedRevenue,
+        });
+    }
+
 
 
 }

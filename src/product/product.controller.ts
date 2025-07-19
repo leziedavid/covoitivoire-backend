@@ -57,10 +57,10 @@ export class ProductController {
             { name: 'files', maxCount: 10 },
         ])
     )
-    @ApiBody({ description: 'Données pour mettre à jour un produit avec fichiers', type: UpdateProductDto,})
+    @ApiBody({ description: 'Données pour mettre à jour un produit avec fichiers', type: UpdateProductDto, })
     @ApiResponse({ status: 200, description: 'Produit mis à jour.' })
     @ApiResponse({ status: 404, description: 'Produit non trouvé.' })
-    async updateProduct( @Param('id') id: string, @UploadedFiles() files: { files?: Express.Multer.File[]; imageFile?: Express.Multer.File[]; },
+    async updateProduct(@Param('id') id: string, @UploadedFiles() files: { files?: Express.Multer.File[]; imageFile?: Express.Multer.File[]; },
         @Body() dto: UpdateProductDto,
         @Req() req,
     ) {
@@ -86,17 +86,17 @@ export class ProductController {
     @ApiResponse({ status: 200, description: 'Liste des produits retournée.' })
     @ApiQuery({ name: 'page', required: false, type: Number })
     @ApiQuery({ name: 'limit', required: false, type: Number })
-    async getProductsByService(@Query('serviceId') serviceId: string, pagination: PaginationParamsDto) {
+    async getProductsByService(@Query('serviceId') serviceId: string, @Query() pagination: PaginationParamsDto) {
         return this.productService.getProductsByService(serviceId, pagination);
     }
 
-    @UseGuards(JwtAuthGuard)
+    // @UseGuards(JwtAuthGuard)
     @Get('valid/all')
     @ApiOperation({ summary: 'Tous les produits valides (non expirés)' })
     @ApiResponse({ status: 200, description: 'Produits valides retournés.' })
     @ApiQuery({ name: 'page', required: false, type: Number })
     @ApiQuery({ name: 'limit', required: false, type: Number })
-    async getAllValidProducts(pagination: PaginationParamsDto) {
+    async getAllValidProducts(@Query() pagination: PaginationParamsDto) {
         return this.productService.getAllValidProducts(pagination);
     }
 
@@ -106,7 +106,7 @@ export class ProductController {
     @ApiResponse({ status: 200, description: 'Produits utilisateur retournés.' })
     @ApiQuery({ name: 'page', required: false, type: Number })
     @ApiQuery({ name: 'limit', required: false, type: Number })
-    async getUserValidProducts( @Req() req, @Query() pagination: PaginationParamsDto) {
+    async getUserValidProducts(@Req() req, @Query() pagination: PaginationParamsDto) {
         const userId = req.user?.id;
         return this.productService.getUserValidProducts(userId, pagination);
     }
@@ -117,9 +117,52 @@ export class ProductController {
     @ApiResponse({ status: 200, description: 'Tous les produits retournés.' })
     @ApiQuery({ name: 'page', required: false, type: Number })
     @ApiQuery({ name: 'limit', required: false, type: Number })
-    async getAllProductsAdmin( pagination: PaginationParamsDto) {
+    async getAllProductsAdmin(@Query() pagination: PaginationParamsDto,) {
         return this.productService.getAllProductsAdmin(pagination);
     }
+
+    // 1 Statistiques des produits pour l’utilisateur connecté
+
+    @UseGuards(JwtAuthGuard)
+    @Get('me/stats')
+    @ApiOperation({ summary: 'Statistiques des produits de l’utilisateur connecté' })
+    @ApiResponse({ status: 200, description: 'Statistiques utilisateur retournées.' })
+    async getUserProductStats(@Req() req) {
+        const userId = req.user?.id;
+        return this.productService.getUserProductStats(userId);
+    }
+
+    // 2. Statistiques globales (admin – pas besoin de userId)
+    @UseGuards(JwtAuthGuard)
+    @Get('admin/stats')
+    @ApiOperation({ summary: 'Statistiques globales des produits (admin)' })
+    @ApiResponse({ status: 200, description: 'Statistiques globales retournées.' })
+    async getGlobalProductStats() {
+        return this.productService.getGlobalProductStats();
+    }
+
+    // 3. Graphe des commandes + revenus (admin avec période)
+
+    @UseGuards(JwtAuthGuard)
+    @Get('admin/stats/orders-revenue')
+    @ApiOperation({ summary: 'Graphiques des commandes et revenus par mois' })
+    @ApiQuery({ name: 'startDate', required: false, type: String, description: 'Date de début (ex: 2024-08-01)' })
+    @ApiQuery({ name: 'endDate', required: false, type: String, description: 'Date de fin (ex: 2025-07-01)' })
+    @ApiResponse({ status: 200, description: 'Graphiques commandes/revenus retournés.' })
+    async getOrdersAndRevenueStats(
+        @Query('startDate') startDate?: string,
+        @Query('endDate') endDate?: string,
+    ) {
+        return this.productService.getOrdersAndRevenueStats(
+            startDate ? new Date(startDate) : undefined,
+            endDate ? new Date(endDate) : undefined,
+        );
+    }
+
+
+
+
+
 }
 
 

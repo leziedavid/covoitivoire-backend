@@ -222,149 +222,6 @@ export class TripService {
         return new BaseResponse(200, 'Liste des trajets du conducteur', data);
     }
 
-    async searchTrips(dto: SearchTripDto & PaginationParamsDto): Promise<any> {
-        const {
-            departureLatitude,
-            departureLongitude,
-            arrivalLatitude,
-            arrivalLongitude,
-            departureDate,
-            departureTime,
-            arrivalDate,
-            arrivalTime,
-            availableSeats = 1,
-            page = 1,
-            limit = 10,
-        } = dto;
-
-        try {
-            // Étape 1 : Recherche stricte
-            const strictTrips = await this.prisma.trip.findMany({
-                where: {
-                    availableSeats: { gte: availableSeats },
-                    ...(departureDate && { date: new Date(departureDate) }),
-                    ...(departureTime && { departureTime }),
-                    ...(arrivalDate && { estimatedArrival: new Date(arrivalDate) }),
-                    ...(arrivalTime && { arrivalTime }),
-                },
-                include: {
-                    driver: true,
-                    vehicle: true,
-                    stopPoints: true,
-                },
-            });
-
-            if (strictTrips.length > 0) {
-                return this.formatPaginatedResult(strictTrips, page, limit, 'Trajets directs trouvés');
-            }
-
-            // Étape 2 : StopPoints
-            const tripsWithStops = await this.prisma.trip.findMany({
-                where: {
-                    availableSeats: { gte: availableSeats },
-                    ...(departureDate && { date: new Date(departureDate) }),
-                    ...(departureTime && { departureTime }),
-                    ...(arrivalDate && { estimatedArrival: new Date(arrivalDate) }),
-                    ...(arrivalTime && { arrivalTime }),
-                    stopPoints: {
-                        some: {
-                            OR: [
-                                { latitude: departureLatitude, longitude: departureLongitude },
-                                { latitude: arrivalLatitude, longitude: arrivalLongitude },
-                            ],
-                        },
-                    },
-                },
-                include: {
-                    driver: true,
-                    vehicle: true,
-                    stopPoints: true,
-                },
-            });
-
-            if (tripsWithStops.length > 0) {
-                return this.formatPaginatedResult(tripsWithStops, page, limit, 'Trajets trouvés via des points d’arrêt');
-            }
-
-            // Étape 3 : Recherche par distance (Haversine)
-            const getDistanceInKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-                const R = 6371;
-                const toRad = (val: number) => (val * Math.PI) / 180;
-                const dLat = toRad(lat2 - lat1);
-                const dLon = toRad(lon2 - lon1);
-                const a =
-                    Math.sin(dLat / 2) ** 2 +
-                    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                return R * c;
-            };
-
-            const allTrips = await this.prisma.trip.findMany({
-                where: {
-                    availableSeats: { gte: availableSeats },
-                },
-                include: {
-                    driver: true,
-                    vehicle: true,
-                    stopPoints: true,
-                },
-            });
-
-            const nearbyTrips = allTrips.filter((trip) => {
-                if (
-                    trip.departureLatitude === null || trip.departureLongitude === null ||
-                    trip.arrivalLatitude === null || trip.arrivalLongitude === null
-                ) {
-                    return false;
-                }
-
-                const departureDist = getDistanceInKm(departureLatitude, departureLongitude, trip.departureLatitude, trip.departureLongitude);
-                const arrivalDist = getDistanceInKm(arrivalLatitude, arrivalLongitude, trip.arrivalLatitude, trip.arrivalLongitude);
-
-                return departureDist <= 30 && arrivalDist <= 30;
-            });
-
-            if (nearbyTrips.length > 0) {
-                return this.formatPaginatedResult(nearbyTrips, page, limit, 'Trajets proches trouvés');
-            }
-
-            // Aucun résultat trouvé
-            return {
-                status: false,
-                message: 'Aucun trajet trouvé',
-                total: 0,
-                page,
-                limit,
-                data: [],
-            };
-        } catch (error) {
-            return {
-                status: false,
-                message: error.message || 'Erreur interne du serveur',
-                total: 0,
-                page,
-                limit,
-                data: [],
-            };
-        }
-    }
-
-    private formatPaginatedResult(data: any[], page: number, limit: number, message: string) {
-        const total = data.length;
-        const start = (page - 1) * limit;
-        const paginated = data.slice(start, start + limit);
-
-        return {
-            status: true,
-            message,
-            total,
-            page,
-            limit,
-            data: paginated,
-        };
-    }
-
-
     async updateTripStatus(tripId: string, newStatus: TripStatus): Promise<BaseResponse<any>> {
         try {
             // 1. Vérifier l'existence du trajet
@@ -413,6 +270,295 @@ export class TripService {
             throw new InternalServerErrorException('Erreur lors de la mise à jour du statut du trajet');
         }
     }
+
+
+
+    async searchTrips(dto: SearchTripDto & PaginationParamsDto): Promise<any> {
+        const {
+            departureLatitude,
+            departureLongitude,
+            arrivalLatitude,
+            arrivalLongitude,
+            departureDate,
+            departureTime,
+            arrivalDate,
+            arrivalTime,
+            availableSeats = 1,
+            page = 1,
+            limit = 10,
+        } = dto;
+
+        try {
+            // Étape 1 : Recherche stricte
+            const strictTrips = await this.prisma.trip.findMany({
+                where: {
+                    availableSeats: { gte: availableSeats },
+                    ...(departureDate && { date: new Date(departureDate) }),
+                    ...(departureTime && { departureTime }),
+                    ...(arrivalDate && { estimatedArrival: new Date(arrivalDate) }),
+                    ...(arrivalTime && { arrivalTime }),
+                },
+                include: {
+                    driver: true,
+                    vehicle: true,
+                    stopPoints: true,
+                },
+            });
+
+            if (strictTrips.length > 0) {
+                const data = this.formatPaginatedResult(strictTrips, page, limit);
+                return new BaseResponse(200, 'Trajets directs trouvés', data);
+            }
+
+            // Étape 2 : StopPoints
+            const tripsWithStops = await this.prisma.trip.findMany({
+                where: {
+                    availableSeats: { gte: availableSeats },
+                    ...(departureDate && { date: new Date(departureDate) }),
+                    ...(departureTime && { departureTime }),
+                    ...(arrivalDate && { estimatedArrival: new Date(arrivalDate) }),
+                    ...(arrivalTime && { arrivalTime }),
+                    stopPoints: {
+                        some: {
+                            OR: [
+                                { latitude: departureLatitude, longitude: departureLongitude },
+                                { latitude: arrivalLatitude, longitude: arrivalLongitude },
+                            ],
+                        },
+                    },
+                },
+                include: {
+                    driver: true,
+                    vehicle: true,
+                    stopPoints: true,
+                },
+            });
+
+            if (tripsWithStops.length > 0) {
+                const data = this.formatPaginatedResult(tripsWithStops, page, limit);
+                return new BaseResponse(200, 'Trajets trouvés via des points d’arrêt', data);
+            }
+
+            // Étape 3 : Recherche par distance
+            const getDistanceInKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+                const R = 6371;
+                const toRad = (val: number) => (val * Math.PI) / 180;
+                const dLat = toRad(lat2 - lat1);
+                const dLon = toRad(lon2 - lon1);
+                const a =
+                    Math.sin(dLat / 2) ** 2 +
+                    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                return R * c;
+            };
+
+            const allTrips = await this.prisma.trip.findMany({
+                where: {
+                    availableSeats: { gte: availableSeats },
+                },
+                include: {
+                    driver: true,
+                    vehicle: true,
+                    stopPoints: true,
+                },
+            });
+
+            const nearbyTrips = allTrips.filter((trip) => {
+                if (
+                    trip.departureLatitude === null || trip.departureLongitude === null ||
+                    trip.arrivalLatitude === null || trip.arrivalLongitude === null
+                ) return false;
+
+                const departureDist = getDistanceInKm(departureLatitude, departureLongitude, trip.departureLatitude, trip.departureLongitude);
+                const arrivalDist = getDistanceInKm(arrivalLatitude, arrivalLongitude, trip.arrivalLatitude, trip.arrivalLongitude);
+
+                return departureDist <= 30 && arrivalDist <= 30;
+            });
+
+            if (nearbyTrips.length > 0) {
+                const data = this.formatPaginatedResult(nearbyTrips, page, limit);
+                return new BaseResponse(200, 'Trajets proches trouvés', data);
+            }
+
+            return new BaseResponse(200, 'Aucun trajet trouvé', {
+                status: false,
+                total: 0,
+                page,
+                limit,
+                data: [],
+            });
+
+        } catch (error) {
+            return new BaseResponse(500, error.message || 'Erreur interne du serveur', {
+                status: false,
+                total: 0,
+                page,
+                limit,
+                data: [],
+            });
+        }
+    }
+
+    private formatPaginatedResult(data: any[], page: number, limit: number) {
+        const total = data.length;
+        const start = (page - 1) * limit;
+        const paginated = data.slice(start, start + limit);
+
+        return {
+            status: true,
+            total,
+            page,
+            limit,
+            data: paginated,
+        };
+    }
+
+
+
+    async searchTrips2(dto: SearchTripDto & PaginationParamsDto): Promise<any> {
+        const {
+            departureLatitude,
+            departureLongitude,
+            arrivalLatitude,
+            arrivalLongitude,
+            departureDate,
+            departureTime,
+            arrivalDate,
+            arrivalTime,
+            availableSeats = 1,
+            page = 1,
+            limit = 10,
+        } = dto;
+
+        try {
+            // Étape 1 : Recherche stricte
+            const strictTrips = await this.prisma.trip.findMany({
+                where: {
+                    availableSeats: { gte: availableSeats },
+                    ...(departureDate && { date: new Date(departureDate) }),
+                    ...(departureTime && { departureTime }),
+                    ...(arrivalDate && { estimatedArrival: new Date(arrivalDate) }),
+                    ...(arrivalTime && { arrivalTime }),
+                },
+                include: {
+                    driver: true,
+                    vehicle: true,
+                    stopPoints: true,
+                },
+            });
+
+            if (strictTrips.length > 0) {
+                return this.formatPaginatedResult2(strictTrips, page, limit, 'Trajets directs trouvés');
+            }
+
+            // Étape 2 : StopPoints
+            const tripsWithStops = await this.prisma.trip.findMany({
+                where: {
+                    availableSeats: { gte: availableSeats },
+                    ...(departureDate && { date: new Date(departureDate) }),
+                    ...(departureTime && { departureTime }),
+                    ...(arrivalDate && { estimatedArrival: new Date(arrivalDate) }),
+                    ...(arrivalTime && { arrivalTime }),
+                    stopPoints: {
+                        some: {
+                            OR: [
+                                { latitude: departureLatitude, longitude: departureLongitude },
+                                { latitude: arrivalLatitude, longitude: arrivalLongitude },
+                            ],
+                        },
+                    },
+                },
+                include: {
+                    driver: true,
+                    vehicle: true,
+                    stopPoints: true,
+                },
+            });
+
+            if (tripsWithStops.length > 0) {
+                return this.formatPaginatedResult2(tripsWithStops, page, limit, 'Trajets trouvés via des points d’arrêt');
+            }
+
+            // Étape 3 : Recherche par distance (Haversine)
+            const getDistanceInKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+                const R = 6371;
+                const toRad = (val: number) => (val * Math.PI) / 180;
+                const dLat = toRad(lat2 - lat1);
+                const dLon = toRad(lon2 - lon1);
+                const a =
+                    Math.sin(dLat / 2) ** 2 +
+                    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                return R * c;
+            };
+
+            const allTrips = await this.prisma.trip.findMany({
+                where: {
+                    availableSeats: { gte: availableSeats },
+                },
+                include: {
+                    driver: true,
+                    vehicle: true,
+                    stopPoints: true,
+                },
+            });
+
+            const nearbyTrips = allTrips.filter((trip) => {
+                if (
+                    trip.departureLatitude === null || trip.departureLongitude === null ||
+                    trip.arrivalLatitude === null || trip.arrivalLongitude === null
+                ) {
+                    return false;
+                }
+
+                const departureDist = getDistanceInKm(departureLatitude, departureLongitude, trip.departureLatitude, trip.departureLongitude);
+                const arrivalDist = getDistanceInKm(arrivalLatitude, arrivalLongitude, trip.arrivalLatitude, trip.arrivalLongitude);
+
+                return departureDist <= 30 && arrivalDist <= 30;
+            });
+
+            if (nearbyTrips.length > 0) {
+                return this.formatPaginatedResult2(nearbyTrips, page, limit, 'Trajets proches trouvés');
+            }
+
+            // Aucun résultat trouvé
+            return {
+                status: false,
+                message: 'Aucun trajet trouvé',
+                total: 0,
+                page,
+                limit,
+                data: [],
+            };
+        } catch (error) {
+            return {
+                status: false,
+                message: error.message || 'Erreur interne du serveur',
+                total: 0,
+                page,
+                limit,
+                data: [],
+            };
+        }
+    }
+
+    private formatPaginatedResult2(data: any[], page: number, limit: number, message: string) {
+        const total = data.length;
+        const start = (page - 1) * limit;
+        const paginated = data.slice(start, start + limit);
+
+        return {
+            status: true,
+            message,
+            total,
+            page,
+            limit,
+            data: paginated,
+        };
+    }
+
+
+
 
 
 }

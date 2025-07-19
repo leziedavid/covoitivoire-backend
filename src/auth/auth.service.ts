@@ -17,6 +17,10 @@ import { ChangePasswordDto } from 'src/dto/request/change-password.dto';
 import { plainToInstance } from 'class-transformer';
 import { UserResponseDataDto, FileManagerDto, WalletDto, TransactionDto, VehicleDto, TripDto, StopPointDto, OrderDto, ServiceOrderDto, MenuItemDto, ServiceWithMenusDto } from 'src/dto/response/user-responseData.dto'; // adapte l'import
 import * as jwt from 'jsonwebtoken';
+import { PaginationParamsDto } from 'src/dto/request/pagination-params.dto';
+import { FunctionService } from 'src/utils/pagination.service';
+import { FilesUpdateDto } from 'src/dto/request/filesUpdatedto';
+import { UpdateProfileDto } from 'src/dto/request/update-profile.dto';
 
 
 @Injectable()
@@ -25,8 +29,9 @@ export class AuthService {
         private readonly prisma: PrismaService,
         private readonly jwtService: JwtService,
         private readonly cloudinary: CloudinaryService,
+        private readonly functionService: FunctionService,
+        
     ) { }
-
 
     private generateAccountNumber(): string {
         return `NR ${Math.floor(Math.random() * 1000000000000)}`; // Exemple de génération de numéro unique
@@ -46,6 +51,8 @@ export class AuthService {
             data: {
                 email: dto.email,
                 name: dto.name,
+                phoneCountryCode: dto.phoneCountryCode,
+                phoneNumber: dto.phoneNumber,
                 password: hashed,
                 passwordGenerate: passwordGenerat,
                 role: dto.role,
@@ -170,6 +177,67 @@ export class AuthService {
 
         const updated = await this.prisma.user.update({ where: { id }, data });
 
+        // 🔁 Fonction réutilisable pour chaque type de fichier
+        const handleFileUpdate = async (buffer: Buffer, fileType: string) => {
+            const existingFile = await this.prisma.fileManager.findFirst({
+                where: { targetId: id, fileType },
+                orderBy: { createdAt: 'desc' },
+            });
+
+            if (existingFile?.fileCode) {
+                await this.cloudinary.deleteFileByPublicId(existingFile.fileCode);
+            }
+
+            if (existingFile) {
+                await this.prisma.fileManager.deleteMany({
+                    where: { fileType, targetId: id },
+                });
+            }
+
+            const upload = await this.cloudinary.uploadFile(buffer, 'users');
+
+            await this.prisma.fileManager.create({
+                data: {
+                    ...upload,
+                    fileType,
+                    targetId: id,
+                },
+            });
+        };
+
+        // 📎 Mise à jour des fichiers
+        try {
+            if (dto.file) {
+                await handleFileUpdate(dto.file.buffer, 'userFiles');
+            }
+
+            if (dto.carte) {
+                await handleFileUpdate(dto.carte.buffer, 'userCarte');
+            }
+
+            if (dto.permis) {
+                await handleFileUpdate(dto.permis.buffer, 'userPermis');
+            }
+        } catch (err) {
+            throw new InternalServerErrorException("Erreur lors de la mise à jour d’un fichier utilisateur");
+        }
+
+        return new BaseResponse(200, 'Profil mis à jour', { user: updated });
+    }
+
+    /** Mise à jour du profil utilisateur */
+    async updateUser2(id: string, dto: UpdateUserDto): Promise<BaseResponse<{ user: any }>> {
+        const user = await this.prisma.user.findUnique({ where: { id } });
+        if (!user) throw new NotFoundException('Utilisateur introuvable');
+
+        const data: any = {};
+        if (dto.name) data.name = dto.name;
+        if (dto.password) data.password = await bcrypt.hash(dto.password, 10);
+        if (dto.role) data.role = dto.role;
+        if (dto.status) data.status = dto.status;
+
+        const updated = await this.prisma.user.update({ where: { id }, data });
+
         if (dto.file) {
             try {
                 const upload = await this.cloudinary.uploadFile(dto.file.buffer, 'users');
@@ -189,7 +257,6 @@ export class AuthService {
                 throw new InternalServerErrorException('Erreur lors de la mise à jour de l’image');
             }
         }
-
 
         if (dto.carte) {
             try {
@@ -235,13 +302,24 @@ export class AuthService {
         return new BaseResponse(200, 'Profil mis à jour', { user: updated });
     }
 
-    /** Validation du compte */
-    async validateCompte(id: string): Promise<BaseResponse<null>> {
+    /**
+   * Valide ou met à jour le statut du compte utilisateur
+   * @param id ID de l'utilisateur
+   * @param status Nouveau statut (UserStatus enum)
+   */
+    async validateCompte(id: string, status: UserStatus): Promise<BaseResponse<null>> {
         const user = await this.prisma.user.findUnique({ where: { id } });
-        if (!user) throw new NotFoundException('Utilisateur introuvable');
 
-        await this.prisma.user.update({ where: { id }, data: { status: UserStatus.ACTIVE } });
-        return new BaseResponse(200, 'Compte validé', null);
+        if (!user) {
+            throw new NotFoundException('Utilisateur introuvable');
+        }
+
+        await this.prisma.user.update({
+            where: { id },
+            data: { status },
+        });
+
+        return new BaseResponse(200, `Compte mis à jour au statut ${status}`, null);
     }
 
     async deleteUser(id: string): Promise<BaseResponse<null>> {
@@ -271,7 +349,6 @@ export class AuthService {
         return new BaseResponse(200, 'Utilisateur supprimé', null);
     }
 
-
     /** Changement de mot de passe */
     async changePassword(dto: ChangePasswordDto): Promise<BaseResponse<null>> {
         const user = await this.prisma.user.findUnique({ where: { email: dto.email } });
@@ -288,7 +365,6 @@ export class AuthService {
 
         return new BaseResponse(200, 'Mot de passe changé avec succès', null);
     }
-
 
     async mapUserToResponse(user: any): Promise<BaseResponse<UserResponseDataDto>> {
         // Récupération de l'image de profil utilisateur
@@ -367,6 +443,118 @@ export class AuthService {
         return new BaseResponse(200, 'Données utilisateur récupérées', dto);
     }
 
+    async ParametresuserData(userId: string): Promise<BaseResponse<any>> {
+        // Étape 1 : Requête vers la table user (avec le wallet en relation)
+        const user = await this.prisma.user.findUnique({
+            where: { id: userId },
+            include: {
+                wallet: true, // inclure le portefeuille lié
+            },
+        });
+
+        if (!user) {
+            return new BaseResponse(404, "Utilisateur introuvable", null);
+        }
+
+        // Étape 2 : Récupération de l'image de profil
+        const profileImage = await this.prisma.fileManager.findFirst({
+            where: { targetId: userId, fileType: 'userFiles' },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        // Étape 3 : Construction de la réponse simplifiée
+        const simplifiedUserData = {
+            id: user.id,
+            name: user.name,
+            email: user.email,
+            phoneCountryCode: user.phoneCountryCode,
+            phoneNumber: user.phoneNumber,
+            role: user.role,
+            status: user.status,
+            imageUrl: profileImage?.fileUrl || null,
+            wallet: user.wallet
+                ? {
+                    id: user.wallet.id,
+                    balance: user.wallet.balance,
+                    paymentMethod: user.wallet.paymentMethod,
+                    rechargeType: user.wallet.rechargeType,
+                    accountNumber: user.wallet.accountNumber,
+                }
+                : null,
+        };
+
+        return new BaseResponse(200, 'Données utilisateur récupérées', simplifiedUserData);
+    }
+
+    async updateFiles(userId: string, dto: FilesUpdateDto) {
+        if (!dto.file) return;
+
+        // Étape 1 : Récupérer l'image existante (si elle existe)
+        const existingImage = await this.prisma.fileManager.findFirst({
+            where: {
+                targetId: userId,
+                fileType: 'userFiles',
+            },
+            orderBy: {
+                createdAt: 'desc',
+            },
+        });
+
+        // Étape 2 : Supprimer sur Cloudinary si l'image existe
+        if (existingImage?.fileCode) {
+            await this.cloudinary.deleteFileByPublicId(existingImage.fileCode);
+        }
+
+        // Étape 3 : Supprimer l’entrée en base (fileManager)
+        if (existingImage) {
+            await this.prisma.fileManager.deleteMany({
+                where: { fileType: 'userFiles', targetId: userId },
+            });
+        }
+
+        // Étape 4 : Upload du nouveau fichier sur Cloudinary
+        try {
+            const upload = await this.cloudinary.uploadFile(dto.file.buffer, 'users');
+
+            // Étape 5 : Création de la nouvelle entrée
+            await this.prisma.fileManager.create({
+                data: {
+                    ...upload,
+                    fileType: 'userFiles',
+                    targetId: userId,
+                },
+            });
+
+        } catch (err) {
+
+            console.error(err);
+            throw new InternalServerErrorException("Erreur lors de la mise à jour de l’image");
+        }
+
+        return new BaseResponse(200, 'Profil mis à jour avec succès', null);
+
+    }
+
+    async updateProfile(userId: string, dto: UpdateProfileDto) {
+
+        const user = await this.prisma.user.findUnique({ where: { id: userId } })
+        if (!user) throw new NotFoundException('Utilisateur introuvable')
+
+        const updateData: any = {}
+
+        if (dto.name) updateData.name = dto.name
+        if (dto.email) updateData.email = dto.email
+        if (dto.phoneNumber) updateData.phoneNumber = dto.phoneNumber
+        if (dto.phoneCountryCode) updateData.phoneCountryCode = dto.phoneCountryCode
+        if (dto.password) updateData.password = await bcrypt.hash(dto.password, 10)
+
+        const updatedUser = await this.prisma.user.update({
+            where: { id: userId },
+            data: updateData,
+        })
+
+    return new BaseResponse(200, 'Profil mis à jour avec succès', updatedUser);
+    }
 
     async assignVehicleToDriver(vehicleId: string, driverId: string): Promise<BaseResponse<null>> {
         const vehicle = await this.prisma.vehicle.findUnique({ where: { id: vehicleId } });
@@ -435,6 +623,38 @@ export class AuthService {
                     data: {
                         ...upload,
                         fileType: 'userFiles',
+                        targetId: driver.id,
+                    },
+                });
+            } catch (err) {
+                throw new InternalServerErrorException('Erreur lors de l’upload de l’image');
+            }
+        }
+        // Image de la carte nationale didentité  accountNumber:accountNumber
+        if (dto.carte) {
+            try {
+                const upload = await this.cloudinary.uploadFile(dto.file.buffer, 'users');
+
+                await this.prisma.fileManager.create({
+                    data: {
+                        ...upload,
+                        fileType: 'userCarte',
+                        targetId: driver.id,
+                    },
+                });
+            } catch (err) {
+                throw new InternalServerErrorException('Erreur lors de l’upload de l’image');
+            }
+        }
+        // image du permis de conduite
+        if (dto.permis) {
+            try {
+                const upload = await this.cloudinary.uploadFile(dto.file.buffer, 'users');
+
+                await this.prisma.fileManager.create({
+                    data: {
+                        ...upload,
+                        fileType: 'userPermis',
                         targetId: driver.id,
                     },
                 });
@@ -624,6 +844,70 @@ export class AuthService {
     }
 
 
+    /** 🔍 Liste paginée de tous les utilisateurs avec relations */
+    async getAllUsers(params: PaginationParamsDto): Promise<BaseResponse<any>> {
+        const { page, limit } = params;
+
+        const data = await this.functionService.paginate({
+            model: 'User',
+            page: Number(page),
+            limit: Number(limit),
+            conditions: {},
+            selectAndInclude: {
+                select: null,
+                include: {
+                    wallet: true,
+                    vehiclesOwned: true,
+                    vehiclesDriven: true,
+                    trips: true,
+                    tripsAsDriver: true,
+                    partner: true,
+                    drivers: true,
+                    transactions: true,
+                    serviceSubscriptions: {
+                        include: {
+                            service: true,
+                        },
+                    },
+                    orders: true,
+                    ecommerceOrders: true,
+                },
+            },
+            orderBy: { createdAt: 'desc' },
+        });
+
+        // Une seule boucle pour récupérer tous les fichiers
+        const usersWithFiles = await Promise.all(
+            data.data.map(async (user) => {
+                const [imageFile, cniFile, permisFile] = await Promise.all([
+                    this.prisma.fileManager.findFirst({
+                        where: { targetId: user.id, fileType: 'userFiles' },
+                        orderBy: { createdAt: 'desc' },
+                    }),
+                    this.prisma.fileManager.findFirst({
+                        where: { targetId: user.id, fileType: 'userCarte' },
+                        orderBy: { createdAt: 'desc' },
+                    }),
+                    this.prisma.fileManager.findFirst({
+                        where: { targetId: user.id, fileType: 'userPermis' },
+                        orderBy: { createdAt: 'desc' },
+                    }),
+                ]);
+
+                return {
+                    ...user,
+                    image: imageFile?.fileUrl || null,
+                    carte: cniFile?.fileUrl || null,
+                    permis: permisFile?.fileUrl || null,
+                };
+            })
+        );
+
+        return new BaseResponse(200, 'Liste des utilisateurs', {
+            ...data,
+            data: usersWithFiles, // Remplace data avec utilisateurs enrichis
+        });
+    }
 
 
 }

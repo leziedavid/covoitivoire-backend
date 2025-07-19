@@ -7,6 +7,7 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { JwtStrategy } from 'src/strategies/jwt.strategy';
 import { NotificationService } from 'src/utils/notification';
+import { FunctionService } from 'src/utils/pagination.service';
 
 @Module({
   imports: [
@@ -25,7 +26,7 @@ import { NotificationService } from 'src/utils/notification';
     PassportModule.register({ defaultStrategy: 'jwt' }),
     PrismaModule],
   controllers: [SubscriptionController],
-  providers: [SubscriptionService,JwtStrategy,NotificationService],
+  providers: [SubscriptionService,JwtStrategy,NotificationService,FunctionService],
   exports: [PassportModule, JwtModule],
 
 })

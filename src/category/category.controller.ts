@@ -15,6 +15,7 @@ import { UserOrTokenAuthGuard } from 'src/guards/user-or-token.guard';
 @ApiTags('Categories')
 @ApiBearerAuth('access-token')
 @Controller('categories')
+
 export class CategoryController {
     constructor(private readonly categoryService: CategoryService) { }
 

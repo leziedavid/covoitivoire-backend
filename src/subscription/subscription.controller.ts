@@ -3,6 +3,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiParam }
 import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 import { SubscriptionService } from './subscription.service';
 import { CreateServiceSubscriptionDto } from 'src/dto/request/service-subscription.dto';
+import { PaginationParamsDto } from 'src/dto/request/pagination-params.dto';
 
 @ApiTags('Subscription Api')
 @ApiBearerAuth('access-token')
@@ -41,22 +42,26 @@ export class SubscriptionController {
     @Get('my-subscriptions')
     @ApiOperation({ summary: 'Liste des souscriptions actives de l’utilisateur' })
     @ApiResponse({ status: 200, description: 'Liste des souscriptions actives récupérées' })
-    async getUserSubscriptions(@Req() req: any) {
+    @ApiQuery({ name: 'page', required: false, type: Number })
+    @ApiQuery({ name: 'limit', required: false, type: Number })
+    async getUserSubscriptions(@Req() req: any,@Query() params: PaginationParamsDto) {
         const user = req.user as any; // typage personnalisé si disponible
         const addedById = user?.userId;
         console.log(addedById);
-        return this.subscriptionService.getUserSubscriptions(addedById);
+        return this.subscriptionService.getUserSubscriptions(addedById,params);
     }
 
     @UseGuards(JwtAuthGuard)
     @Get('all')
     @ApiOperation({ summary: 'Liste de toutes les souscriptions de l’utilisateur, sans filtre' })
     @ApiResponse({ status: 200, description: 'Toutes les souscriptions récupérées' })
-    async getAllUserSubscriptions(@Req() req: any) {
+    @ApiQuery({ name: 'page', required: false, type: Number })
+    @ApiQuery({ name: 'limit', required: false, type: Number })
+    async getAllUserSubscriptions(@Req() req: any,@Query() params: PaginationParamsDto) {
         const user = req.user as any; // typage personnalisé si disponible
         const addedById = user?.userId;
         console.log(addedById);
-        return this.subscriptionService.getAllUserSubscriptions(addedById);
+        return this.subscriptionService.getAllUserSubscriptions(addedById,params);
     }
 
     @UseGuards(JwtAuthGuard)
@@ -64,13 +69,16 @@ export class SubscriptionController {
     @ApiOperation({ summary: 'Souscriptions actives filtrées par type de service' })
     @ApiQuery({ name: 'type', required: true, description: 'Type de service (ex: livraison, restaurant, etc.)' })
     @ApiResponse({ status: 200, description: 'Souscriptions filtrées récupérées' })
+    @ApiQuery({ name: 'page', required: false, type: Number })
+    @ApiQuery({ name: 'limit', required: false, type: Number })
     async getUserSubscriptionsByServiceType(
         @Req() req: any,
-        @Query('type') type: string,) {
+        @Query('type') type: string,
+        @Query() params: PaginationParamsDto,) {
         const user = req.user as any; // typage personnalisé si disponible
         const addedById = user?.userId;
         console.log(addedById);
-        return this.subscriptionService.getUserSubscriptionsByServiceType(addedById, type);
+        return this.subscriptionService.getUserSubscriptionsByServiceType(addedById, type,params);
     }
 
     @UseGuards(JwtAuthGuard)
@@ -78,21 +86,30 @@ export class SubscriptionController {
     @ApiOperation({ summary: 'Souscriptions expirées de l’utilisateur' })
     @ApiQuery({ name: 'date', required: false, description: 'Date de référence au format ISO (par défaut : maintenant)',})
     @ApiResponse({ status: 200, description: 'Souscriptions expirées récupérées' })
-    async getExpiredSubscriptions( @Req() req: any,@Query('date') date?: string,) {
+    @ApiQuery({ name: 'page', required: false, type: Number })
+    @ApiQuery({ name: 'limit', required: false, type: Number })
+
+    async getExpiredSubscriptions(
+        @Req() req: any,
+        @Query() params: PaginationParamsDto,
+        @Query('date') date?: string,) {
         const user = req.user as any; // typage personnalisé si disponible
         const addedById = user?.userId;
         console.log(addedById);
-        return this.subscriptionService.getExpiredSubscriptions(addedById, date ? new Date(date) : undefined);
+        return this.subscriptionService.getExpiredSubscriptions(addedById, params, date ? new Date(date) : undefined);
     }
 
         @UseGuards(JwtAuthGuard)
     @Get('expiring-soon')
     @ApiOperation({ summary: 'Souscriptions expirant dans la semaine' })
     @ApiResponse({ status: 200, description: 'Souscriptions expirant bientôt récupérées' })
-    async getSubscriptionsExpiringInAWeek( @Req() req: any,) {
+    @ApiQuery({ name: 'page', required: false, type: Number })
+    @ApiQuery({ name: 'limit', required: false, type: Number })
+
+    async getSubscriptionsExpiringInAWeek( @Req() req: any,@Query() params: PaginationParamsDto,) {
         const user = req.user as any; // typage personnalisé si disponible
         const addedById = user?.userId;
         console.log(addedById);
-        return this.subscriptionService.getSubscriptionsExpiringInAWeek(addedById);
+        return this.subscriptionService.getSubscriptionsExpiringInAWeek(addedById,params);
     }
 }

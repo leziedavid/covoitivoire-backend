@@ -3,8 +3,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 import { OrderStatus, TransactionType, TripStatus } from '@prisma/client';
 import { BaseResponse } from 'src/dto/request/base-response.dto';
 import { NotificationsGateway } from 'src/notifications-gateway/notifications.gateway';
-import { FunctionService, PaginateOptions } from 'src/utils/pagination.service';
-import { PaginationParamsDto } from 'src/dto/request/pagination-params.dto';
+import { FunctionService } from 'src/utils/pagination.service';
 
 @Injectable()
 export class OrderService {
@@ -12,6 +11,7 @@ export class OrderService {
         private readonly prisma: PrismaService,
         private readonly notificationsGateway: NotificationsGateway, // <= injecté ic
         private readonly functionService: FunctionService,
+       
     ) { }
 
 
@@ -26,7 +26,7 @@ export class OrderService {
     /** 🛒 Passer une commande sur un trajet */
     async createOrder(userId: string, tripId: string): Promise<BaseResponse<any>> {
         // Récupérer le trajet
-
+        
         const trip = await this.prisma.trip.findUnique({
             where: { id: tripId },
             include: { createdBy: true },
@@ -119,7 +119,7 @@ export class OrderService {
 
         // 💳 Débiter la commission
         await this.prisma.$transaction([
-
+            
             this.prisma.wallet.update({
                 where: { id: wallet.id },
                 data: { balance: { decrement: commission } },
@@ -323,6 +323,169 @@ export class OrderService {
         });
     }
 
+    // 📦 Récupérer toutes les commandes d’un utilisateur
+    async getAllOrdersByUser(userId: string): Promise<BaseResponse<any[]>> {
+        const orders = await this.prisma.order.findMany({
+            where: { userId },
+            include: { trip: true },
+        });
+        return new BaseResponse(200, 'Toutes les commandes de l’utilisateur', orders);
+    }
+
+    // 📅 Commandes du jour d’un utilisateur
+    async getTodayOrdersByUser(userId: string): Promise<BaseResponse<any[]>> {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const orders = await this.prisma.order.findMany({
+            where: {
+                userId,
+                createdAt: { gte: today },
+            },
+            include: { trip: true },
+        });
+        return new BaseResponse(200, 'Commandes du jour de l’utilisateur', orders);
+    }
+
+    // ❌ Commandes annulées d’un utilisateur
+    async getCanceledOrdersByUser(userId: string): Promise<BaseResponse<any[]>> {
+        const orders = await this.prisma.order.findMany({
+            where: {
+                userId,
+                status: 'CANCELLED',
+            },
+            include: { trip: true },
+        });
+        return new BaseResponse(200, 'Commandes annulées de l’utilisateur', orders);
+    }
+
+    // ✅ Commandes validées d’un utilisateur
+    async getValidatedOrdersByUser(userId: string): Promise<BaseResponse<any[]>> {
+        const orders = await this.prisma.order.findMany({
+            where: {
+                userId,
+                status: 'VALIDATED',
+            },
+            include: { trip: true },
+        });
+        return new BaseResponse(200, 'Commandes validées de l’utilisateur', orders);
+    }
+
+    // 👨‍✈️ Toutes les commandes d’un chauffeur (driver)
+    async getAllOrdersByDriver(driverId: string): Promise<BaseResponse<any[]>> {
+        const orders = await this.prisma.order.findMany({
+            where: {
+                trip: {
+                    driverId,
+                },
+            },
+            include: { trip: true },
+        });
+        return new BaseResponse(200, 'Toutes les commandes du chauffeur', orders);
+    }
+
+    async getTodayOrdersByDriver(driverId: string): Promise<BaseResponse<any[]>> {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const orders = await this.prisma.order.findMany({
+            where: {
+                trip: {
+                    driverId,
+                },
+                createdAt: { gte: today },
+            },
+            include: { trip: true },
+        });
+        return new BaseResponse(200, 'Commandes du jour du chauffeur', orders);
+    }
+
+    async getCanceledOrdersByDriver(driverId: string): Promise<BaseResponse<any[]>> {
+        const orders = await this.prisma.order.findMany({
+            where: {
+                trip: {
+                    driverId,
+                },
+                status: 'CANCELLED',
+            },
+            include: { trip: true },
+        });
+        return new BaseResponse(200, 'Commandes annulées du chauffeur', orders);
+    }
+
+    async getValidatedOrdersByDriver(driverId: string): Promise<BaseResponse<any[]>> {
+        const orders = await this.prisma.order.findMany({
+            where: {
+                trip: {
+                    driverId,
+                },
+                status: 'VALIDATED',
+            },
+            include: { trip: true },
+        });
+        return new BaseResponse(200, 'Commandes validées du chauffeur', orders);
+    }
+
+    // 🤝 Toutes les commandes d’un partenaire
+    async getAllOrdersByPartner(partnerId: string): Promise<BaseResponse<any[]>> {
+        const orders = await this.prisma.order.findMany({
+            where: {
+                trip: {
+                    vehicle: {
+                        partnerId,
+                    },
+                },
+            },
+            include: { trip: true },
+        });
+        return new BaseResponse(200, 'Toutes les commandes du partenaire', orders);
+    }
+
+    async getTodayOrdersByPartner(partnerId: string): Promise<BaseResponse<any[]>> {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const orders = await this.prisma.order.findMany({
+            where: {
+                trip: {
+                    vehicle: {
+                        partnerId,
+                    },
+                },
+                createdAt: { gte: today },
+            },
+            include: { trip: true },
+        });
+        return new BaseResponse(200, 'Commandes du jour du partenaire', orders);
+    }
+
+    async getCanceledOrdersByPartner(partnerId: string): Promise<BaseResponse<any[]>> {
+        const orders = await this.prisma.order.findMany({
+            where: {
+                trip: {
+                    vehicle: {
+                        partnerId,
+                    },
+                },
+                status: 'CANCELLED',
+            },
+            include: { trip: true },
+        });
+        return new BaseResponse(200, 'Commandes annulées du partenaire', orders);
+    }
+
+    async getValidatedOrdersByPartner(partnerId: string): Promise<BaseResponse<any[]>> {
+        const orders = await this.prisma.order.findMany({
+            where: {
+                trip: {
+                    vehicle: {
+                        partnerId,
+                    },
+                },
+                status: 'VALIDATED',
+            },
+            include: { trip: true },
+        });
+        return new BaseResponse(200, 'Commandes validées du partenaire', orders);
+    }
+
     /** 📊 Statistiques globales des commandes (admin/dashboard) */
     async getGlobalOrderStats(): Promise<BaseResponse<any>> {
         const today = new Date();
@@ -348,117 +511,7 @@ export class OrderService {
     }
 
 
-    // avec pargination
-    private buildOrderPaginateOptions(where: any, params: PaginationParamsDto): PaginateOptions {
-        return {
-            model: 'Order',
-            page: Number(params.page),
-            limit: Number(params.limit),
-            conditions: where,
-            orderBy: { createdAt: 'desc' },
-            selectAndInclude: {
-                include: {
-                    trip: {
-                        include: {
-                            driver: true,
-                            vehicle: true,
-                        },
-                    },
-                    user: true,
-                },
-                select: null,
-            },
-        };
-    }
 
-    async getAllOrdersByUser(userId: string, params: PaginationParamsDto): Promise<BaseResponse<any>> {
-        const options = this.buildOrderPaginateOptions({ userId }, params);
-        const data = await this.functionService.paginate(options);
-        return new BaseResponse(200, 'Toutes les commandes de l’utilisateur', data);
-    }
-
-    async getTodayOrdersByUser(userId: string, params: PaginationParamsDto): Promise<BaseResponse<any>> {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const where = { userId, createdAt: { gte: today } };
-        const options = this.buildOrderPaginateOptions(where, params);
-        const data = await this.functionService.paginate(options);
-        return new BaseResponse(200, 'Commandes du jour de l’utilisateur', data);
-    }
-
-    async getCanceledOrdersByUser(userId: string, params: PaginationParamsDto): Promise<BaseResponse<any>> {
-        const where = { userId, status: OrderStatus.CANCELLED };
-        const options = this.buildOrderPaginateOptions(where, params);
-        const data = await this.functionService.paginate(options);
-        return new BaseResponse(200, 'Commandes annulées de l’utilisateur', data);
-    }
-
-    async getValidatedOrdersByUser(userId: string, params: PaginationParamsDto): Promise<BaseResponse<any>> {
-        const where = { userId, status: OrderStatus.VALIDATED };
-        const options = this.buildOrderPaginateOptions(where, params);
-        const data = await this.functionService.paginate(options);
-        return new BaseResponse(200, 'Commandes validées de l’utilisateur', data);
-    }
-
-    async getAllOrdersByDriver(driverId: string, params: PaginationParamsDto): Promise<BaseResponse<any>> {
-        const where = { trip: { driverId } };
-        const options = this.buildOrderPaginateOptions(where, params);
-        const data = await this.functionService.paginate(options);
-        return new BaseResponse(200, 'Toutes les commandes du chauffeur', data);
-    }
-
-    async getTodayOrdersByDriver(driverId: string, params: PaginationParamsDto): Promise<BaseResponse<any>> {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const where = { trip: { driverId }, createdAt: { gte: today } };
-        const options = this.buildOrderPaginateOptions(where, params);
-        const data = await this.functionService.paginate(options);
-        return new BaseResponse(200, 'Commandes du jour du chauffeur', data);
-    }
-
-    async getCanceledOrdersByDriver(driverId: string, params: PaginationParamsDto): Promise<BaseResponse<any>> {
-        const where = { trip: { driverId }, status: OrderStatus.CANCELLED };
-        const options = this.buildOrderPaginateOptions(where, params);
-        const data = await this.functionService.paginate(options);
-        return new BaseResponse(200, 'Commandes annulées du chauffeur', data);
-    }
-
-    async getValidatedOrdersByDriver(driverId: string, params: PaginationParamsDto): Promise<BaseResponse<any>> {
-        const where = { trip: { driverId }, status: OrderStatus.VALIDATED };
-        const options = this.buildOrderPaginateOptions(where, params);
-        const data = await this.functionService.paginate(options);
-        return new BaseResponse(200, 'Commandes validées du chauffeur', data);
-    }
-
-    async getAllOrdersByPartner(partnerId: string, params: PaginationParamsDto): Promise<BaseResponse<any>> {
-        const where = { trip: { vehicle: { partnerId } } };
-        const options = this.buildOrderPaginateOptions(where, params);
-        const data = await this.functionService.paginate(options);
-        return new BaseResponse(200, 'Toutes les commandes du partenaire', data);
-    }
-
-    async getTodayOrdersByPartner(partnerId: string, params: PaginationParamsDto): Promise<BaseResponse<any>> {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const where = { trip: { vehicle: { partnerId } }, createdAt: { gte: today } };
-        const options = this.buildOrderPaginateOptions(where, params);
-        const data = await this.functionService.paginate(options);
-        return new BaseResponse(200, 'Commandes du jour du partenaire', data);
-    }
-
-    async getCanceledOrdersByPartner(partnerId: string, params: PaginationParamsDto): Promise<BaseResponse<any>> {
-        const where = { trip: { vehicle: { partnerId } }, status: OrderStatus.CANCELLED };
-        const options = this.buildOrderPaginateOptions(where, params);
-        const data = await this.functionService.paginate(options);
-        return new BaseResponse(200, 'Commandes annulées du partenaire', data);
-    }
-
-    async getValidatedOrdersByPartner(partnerId: string, params: PaginationParamsDto): Promise<BaseResponse<any>> {
-        const where = { trip: { vehicle: { partnerId } }, status: OrderStatus.VALIDATED };
-        const options = this.buildOrderPaginateOptions(where, params);
-        const data = await this.functionService.paginate(options);
-        return new BaseResponse(200, 'Commandes validées du partenaire', data);
-    }
 
 }
 

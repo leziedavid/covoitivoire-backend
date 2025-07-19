@@ -19,6 +19,9 @@ import { ProductModule } from './product/product.module';
 import { DeliveryModule } from './delivery/delivery.module';
 import { StatisticsModule } from './statistics/statistics.module';
 import { NotificationsGatewayModule } from './notifications-gateway/notifications-gateway.module';
+import { EcommerceOrderModule } from './ecommerce-order/ecommerce-order.module';
+import { TransactionModule } from './transaction/transaction.module';
+import { MessageModule } from './message/message.module';
 
 @Module({
   imports: [
@@ -40,6 +43,9 @@ import { NotificationsGatewayModule } from './notifications-gateway/notification
     DeliveryModule,
     StatisticsModule,
     NotificationsGatewayModule,
+    EcommerceOrderModule,
+    TransactionModule,
+    MessageModule,
   ],
 })
 export class AppModule {}

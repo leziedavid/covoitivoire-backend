@@ -42,7 +42,7 @@ export class RegisterDto {
     })
     @IsOptional()
     file?: any;
-    
+
 // Image de la   carte nationale didentité
     @ApiPropertyOptional({
         type: 'string',
