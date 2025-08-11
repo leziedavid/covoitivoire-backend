@@ -21,7 +21,6 @@ RUN npx prisma generate
 # Builder le projet (NestJS ou autre)
 RUN npm run build
 
-
 # Étape 2 : Runner - image finale minimaliste pour exécuter
 FROM node:20-alpine AS runner
 
@@ -33,15 +32,16 @@ COPY package*.json ./
 # Installer uniquement les dépendances prod (pour modules natifs éventuels)
 RUN npm install --only=production
 
-# Copier le build et node_modules complets (prisma a besoin de tout node_modules)
+# Copier le build, node_modules et prisma depuis builder
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
-
-# Copier dossier prisma (pour migrations, introspection au runtime)
 COPY --from=builder /app/prisma ./prisma
 
 # Créer dossier storage (requis par l'app)
 RUN mkdir -p /app/storage
+
+# Installer la compatibilité OpenSSL 1.1 requise par Prisma
+RUN apk add --no-cache openssl1.1-compat
 
 # Installer PM2 globalement
 RUN npm install pm2 -g
