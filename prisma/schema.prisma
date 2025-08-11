@@ -123,12 +123,11 @@ enum MessageSender {
   support
 }
 
-
 model User {
   id                   String                @id @default(uuid())
   email                String                @unique
   password             String
-  passwordGenerate     String?               // 👈 Champ ajouté
+  passwordGenerate     String? // 👈 Champ ajouté
   name                 String
   role                 Role
   status               UserStatus            @default(INACTIVE)
@@ -154,7 +153,6 @@ model User {
   serviceSubscriptions ServiceSubscription[]
   // Commandes générales (trajets)
   orders               Order[]
-
   // E-commerce
   ecommerceOrders       EcommerceOrder[]
   addedProducts         Product[]         @relation("AddedByProduct")
@@ -176,7 +174,6 @@ model User {
   notifications      Notification[]
 
   messagesSent Message[] @relation("UserMessages")
-
 }
 
 model Wallet {
@@ -189,23 +186,22 @@ model Wallet {
   rechargeType  String        @default("WAVE")
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @default(now()) @updatedAt
-  accountNumber  String        @unique        // Numéro de compte unique
-
+  accountNumber String        @unique // Numéro de compte unique
 }
 
 model Transaction {
-  id          String          @id @default(uuid())
-  amount      Int
-  transactionNumber  String?          @unique // 🆕 Optionnel avec @unique
-  type        TransactionType
-  walletId    String
-  wallet      Wallet          @relation(fields: [walletId], references: [id])
-  userId      String // ✅ Ajouté pour tracer l’utilisateur concerné
-  user        User            @relation(fields: [userId], references: [id])
-  reference   String? // ✅ Ex: ID de commande, ID de trajet...
-  description String? // ✅ Ex: "Commission 18% prélevée pour la commande XYZ"
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @default(now()) @updatedAt
+  id                String          @id @default(uuid())
+  amount            Int
+  transactionNumber String?         @unique // 🆕 Optionnel avec @unique
+  type              TransactionType
+  walletId          String
+  wallet            Wallet          @relation(fields: [walletId], references: [id])
+  userId            String // ✅ Ajouté pour tracer l’utilisateur concerné
+  user              User            @relation(fields: [userId], references: [id])
+  reference         String? // ✅ Ex: ID de commande, ID de trajet...
+  description       String? // ✅ Ex: "Commission 18% prélevée pour la commande XYZ"
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @default(now()) @updatedAt
 }
 
 model Vehicle {
@@ -292,7 +288,7 @@ model Service {
   description   String?
   type          ServiceType
   imageUrl      String?
-  icon            String?               // <-- Ajouté ici
+  icon          String? // <-- Ajouté ici
   // UUID du user créateur du service
   partnerId     String
   partner       User                  @relation("PartnerServices", fields: [partnerId], references: [id])
@@ -303,46 +299,46 @@ model Service {
   deliveries    Delivery[]
   subscriptions ServiceSubscription[]
   // Champs ajoutés
-  price           Float                 @default(0)
-  promoPrice      Float                 @default(0)
-  isActivePromo   Boolean               @default(false)
-  statusService   Boolean               @default(true)
-
+  price         Float                 @default(0)
+  promoPrice    Float                 @default(0)
+  isActivePromo Boolean               @default(false)
+  statusService Boolean               @default(true)
 }
 
 model ServiceSubscription {
-  id           String   @id @default(uuid())
+  id           String             @id @default(uuid())
   userId       String
   serviceId    String
-  subscribedAt DateTime @default(now())
+  subscribedAt DateTime           @default(now())
   startDate    DateTime
   endDate      DateTime
   status       SubscriptionStatus @default(ACTIVE)
-  user         User     @relation(fields: [userId], references: [id])
-  service      Service  @relation(fields: [serviceId], references: [id])
+  user         User               @relation(fields: [userId], references: [id])
+  service      Service            @relation(fields: [serviceId], references: [id])
 
   @@index([userId, serviceId])
 }
 
 model Product {
-  id                 String               @id @default(uuid())
+  id                 String                 @id @default(uuid())
   name               String
   description        String?
   price              Float
   stock              Int
-  sku                String               @unique
+  sku                String                 @unique
   imageUrl           String?
-  createdAt          DateTime             @default(now())
-  updatedAt          DateTime             @updatedAt
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
   categoryId         String
-  category           Category             @relation(fields: [categoryId], references: [id])
+  category           Category               @relation(fields: [categoryId], references: [id])
   serviceId          String
-  service            Service              @relation(fields: [serviceId], references: [id])
+  service            Service                @relation(fields: [serviceId], references: [id])
   addedById          String
-  addedBy            User                 @relation("AddedByProduct", fields: [addedById], references: [id])
+  addedBy            User                   @relation("AddedByProduct", fields: [addedById], references: [id])
   EcommerceOrderItem EcommerceOrderItem[]
   // Variants assignés via la table pivot
-  variants ProduitListeVariante[]
+  variants           ProduitListeVariante[]
+  variantType        VariantType?
 }
 
 model Variant {
@@ -364,6 +360,7 @@ model ProduitListeVariante {
   variantId String
   product   Product @relation(fields: [productId], references: [id])
   variant   Variant @relation(fields: [variantId], references: [id])
+
   @@id([productId, variantId])
 }
 
@@ -445,21 +442,21 @@ model DeliveryAssignment {
 }
 
 model EcommerceOrder {
-  id            String               @id @default(uuid())
+  id             String               @id @default(uuid())
   ordersNumber   String               @unique // 🆕 Numéro unique de commande
-  userId        String
-  status        OrderStatus          @default(PENDING)
-  paymentMethod PaymentMethod
+  userId         String
+  status         OrderStatus          @default(PENDING)
+  paymentMethod  PaymentMethod
   // Méthodes de livraison
   deliveryMethod DeliveryMethod
-  amount        Float?
-  canceledAt    DateTime?
-  createdAt     DateTime             @default(now())
-  updatedAt     DateTime             @updatedAt
-  user          User                 @relation(fields: [userId], references: [id])
-  items         EcommerceOrderItem[]
-  addedById     String
-  addedBy       User                 @relation("AddedByEcommerceOrder", fields: [addedById], references: [id])
+  amount         Float?
+  canceledAt     DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  user           User                 @relation(fields: [userId], references: [id])
+  items          EcommerceOrderItem[]
+  addedById      String
+  addedBy        User                 @relation("AddedByEcommerceOrder", fields: [addedById], references: [id])
 }
 
 model EcommerceOrderItem {
@@ -511,39 +508,36 @@ model FileManager {
 }
 
 model Notification {
-  id            String   @id @default(uuid())
-  userId        String
-  user          User     @relation(fields: [userId], references: [id])
-  type          NotificationType
-  subject       String
-  content       String
-  status        NotificationStatus @default(PENDING)
-  contact       String?
-  email         String?
-  pushOptions   Json? // pour stocker les options push (deviceId, etc.)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @default(now()) @updatedAt
+  id          String             @id @default(uuid())
+  userId      String
+  user        User               @relation(fields: [userId], references: [id])
+  type        NotificationType
+  subject     String
+  content     String
+  status      NotificationStatus @default(PENDING)
+  contact     String?
+  email       String?
+  pushOptions Json? // pour stocker les options push (deviceId, etc.)
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @default(now()) @updatedAt
 }
 
 model Message {
-  id           String     @id @default(uuid()) // UUID comme identifiant principal
-  text         String?
-  imageUrl     String?
-  timestamp    DateTime   @default(now())
-  sender       MessageSender
+  id        String        @id @default(uuid()) // UUID comme identifiant principal
+  text      String?
+  imageUrl  String?
+  timestamp DateTime      @default(now())
+  sender    MessageSender
 
-  senderId     String
-  senderUser   User       @relation("UserMessages", fields: [senderId], references: [id])
+  senderId   String
+  senderUser User   @relation("UserMessages", fields: [senderId], references: [id])
 
-  repliedToId  String?    // doit être String pour matcher l'id de Message
-  repliedTo    Message?   @relation("ReplyTo", fields: [repliedToId], references: [id])
-  replies      Message[]  @relation("ReplyTo")
+  repliedToId String? // doit être String pour matcher l'id de Message
+  repliedTo   Message?  @relation("ReplyTo", fields: [repliedToId], references: [id])
+  replies     Message[] @relation("ReplyTo")
 
-  lastOrderId  String?    // UUID d'un Trip, EcommerceOrder ou Delivery (nullable)
+  lastOrderId String? // UUID d'un Trip, EcommerceOrder ou Delivery (nullable)
 
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
-
-
-

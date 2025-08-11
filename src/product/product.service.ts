@@ -17,8 +17,6 @@ export class ProductService {
     ) { }
 
 
-
-
     private async generateUniqueSku(name: string): Promise<string> {
         const baseSku = name.trim().toUpperCase().replace(/[^A-Z0-9]+/g, '-').substring(0, 20);
 
@@ -61,9 +59,7 @@ export class ProductService {
                 },
             },
         });
-
-        // console.dir(services, { depth: null });
-
+        
         if (!activeService) {
             throw new ForbiddenException('Abonnement ECOMMERCE invalide ou expiré');
         }
@@ -91,6 +87,7 @@ export class ProductService {
                 imageUrl,
                 price: priceNumber,
                 stock: stockNumber,
+                variantType: productData.variantType,
                 addedBy: {
                     connect: { id: userId },
                 },
@@ -102,16 +99,6 @@ export class ProductService {
                 },
             },
         });
-
-        // if (variantIds && variantIds.length > 0) {
-        //     await this.prisma.produitListeVariante.createMany({
-        //         data: variantIds.map((variantId) => ({
-        //             productId: product.id,
-        //             variantId,
-        //         })),
-        //         skipDuplicates: true,
-        //     });
-        // }
 
           // 6. Traitement des variantes (parser CSV s'il le faut)
         let parsedVariantIds: string[] = [];
@@ -159,6 +146,97 @@ export class ProductService {
         return new BaseResponse(201, 'Produit créé avec succès', { productId: product.id });
     }
 
+    async updateProduct(id: string, dto: UpdateProductDto, userId: string): Promise<BaseResponse<null>> {
+        // Vérifie que le produit existe
+        const product = await this.prisma.product.findUnique({ where: { id } });
+        if (!product) {
+            throw new NotFoundException('Produit introuvable');
+        }
+
+        // Vérifie que l'utilisateur est le créateur
+        if (product.addedById !== userId) {
+            throw new ForbiddenException('Vous n’êtes pas autorisé à modifier ce produit');
+        }
+
+        // Extraction et parsing des champs
+        const { files,imageFile, variantIds, price,stock, ...productData} = dto as any;
+
+        // Conversion sécurisée des champs numériques (uniquement si présents)
+        const priceNumber = price !== undefined ? parseFloat(price) : undefined;
+        const stockNumber = stock !== undefined ? parseInt(stock, 10) : undefined;
+
+        // Préparation des données à mettre à jour
+        const updateData: any = { ...productData, };
+        if (priceNumber !== undefined) updateData.price = priceNumber;
+        if (stockNumber !== undefined) updateData.stock = stockNumber;
+
+        // Mise à jour principale
+        await this.prisma.product.update({
+            where: { id },
+            data: updateData,
+        });
+
+        // Mise à jour de l'image principale
+        if (imageFile) {
+            const uploadResult = await this.cloudinary.uploadFile(imageFile.buffer, 'products');
+            await this.prisma.product.update({
+                where: { id },
+                data: { imageUrl: uploadResult.fileUrl },
+            });
+        }
+
+        // Ajout des fichiers secondaires (ex : PDF, images supplémentaires)
+        if (files && files.length > 0) {
+            for (const file of files) {
+                const upload = await this.cloudinary.uploadFile(file.buffer, 'productFiles');
+                await this.prisma.fileManager.create({
+                    data: {
+                        ...upload,
+                        fileType: 'productFiles',
+                        targetId: id,
+                    },
+                });
+            }
+        }
+
+        // Traitement des variantes (table pivot produitListeVariante)
+        let parsedVariantIds: string[] = [];
+
+        if (typeof variantIds === 'string') {
+            parsedVariantIds = variantIds.split(',').map((id) => id.trim());
+        } else if (Array.isArray(variantIds)) {
+            parsedVariantIds = variantIds;
+        }
+
+        if (parsedVariantIds.length > 0) {
+            // Récupérer les associations déjà existantes
+            const existingRelations = await this.prisma.produitListeVariante.findMany({
+                where: {
+                    productId: id,
+                    variantId: { in: parsedVariantIds },
+                },
+                select: { variantId: true },
+            });
+
+            const existingVariantIds = new Set(existingRelations.map(v => v.variantId));
+
+            // Filtrer les nouvelles associations à ajouter
+            const newVariantIds = parsedVariantIds.filter(variantId => !existingVariantIds.has(variantId));
+
+            if (newVariantIds.length > 0) {
+                await this.prisma.produitListeVariante.createMany({
+                    data: newVariantIds.map((variantId) => ({
+                        productId: id,
+                        variantId,
+                    })),
+                    skipDuplicates: true, // sécurité supplémentaire
+                });
+            }
+        }
+
+        return new BaseResponse(200, 'Produit mis à jour', null);
+    }
+
     async getProductById(id: string): Promise<BaseResponse<any>> {
         const product = await this.prisma.product.findUnique({
             where: { id },
@@ -184,15 +262,22 @@ export class ProductService {
         });
     }
 
-    async updateProduct(id: string, dto: UpdateProductDto, userId: string): Promise<BaseResponse<null>> {
+    async updateProduct2(id: string, dto: UpdateProductDto, userId: string): Promise<BaseResponse<null>> {
+
         const product = await this.prisma.product.findUnique({ where: { id } });
         if (!product) throw new NotFoundException('Produit introuvable');
+
+        console.log(userId, product.addedById);
 
         if (product.addedById !== userId) {
             throw new ForbiddenException('Vous n’êtes pas autorisé à modifier ce produit');
         }
 
-        const { files, imageFile, variantIds, ...productData } = dto as any;
+        const { files, imageFile, variantIds,price, stock, ...productData } = dto as any;
+
+        // Convertir price et stock en nombres (si ce ne sont pas déjà des nombres)
+        const priceNumber = parseFloat(price);
+        const stockNumber = parseInt(stock, 10);
 
         await this.prisma.product.update({
             where: { id },
@@ -222,6 +307,7 @@ export class ProductService {
 
         if (variantIds) {
             await this.prisma.produitListeVariante.deleteMany({ where: { productId: id } });
+            
             await this.prisma.produitListeVariante.createMany({
                 data: variantIds.map((variantId) => ({ productId: id, variantId })),
                 skipDuplicates: true,
@@ -407,129 +493,6 @@ export class ProductService {
         return new BaseResponse(200, 'Tous les produits admin avec images', data);
     }
 
-    // async getProductsByService(serviceId: string): Promise<BaseResponse<any[]>> {
-    //     const now = new Date();
-
-    //     const products = await this.prisma.product.findMany({
-    //         where: {
-    //             serviceId,
-    //             service: {
-    //                 subscriptions: {
-    //                     some: {
-    //                         startDate: { lte: now },
-    //                         endDate: { gte: now },
-    //                     },
-    //                 },
-    //             },
-    //         },
-    //         include: {
-    //             service: true,
-    //             variants: { include: { variant: true } },
-    //         },
-    //     });
-
-    //     const productsWithFiles = await Promise.all(
-    //         products.map(async (product) => {
-    //             const files = await this.prisma.fileManager.findMany({
-    //                 where: { fileType: 'productFiles', targetId: product.id },
-    //                 orderBy: { createdAt: 'desc' },
-    //             });
-    //             return { ...product, variants: product.variants.map((v) => v.variant), files };
-    //         })
-    //     );
-
-    //     return new BaseResponse(200, 'Liste des produits du service', productsWithFiles);
-    // }
-
-    // async getAllValidProducts(): Promise<BaseResponse<any[]>> {
-    //     const now = new Date();
-
-    //     const products = await this.prisma.product.findMany({
-    //         where: {
-    //             service: {
-    //                 subscriptions: {
-    //                     some: {
-    //                         startDate: { lte: now },
-    //                         endDate: { gte: now },
-    //                     },
-    //                 },
-    //             },
-    //         },
-    //         include: {
-    //             service: true,
-    //             variants: { include: { variant: true } },
-    //         },
-    //     });
-
-    //     const productsWithFiles = await Promise.all(
-    //         products.map(async (product) => {
-    //             const files = await this.prisma.fileManager.findMany({
-    //                 where: { fileType: 'productFiles', targetId: product.id },
-    //                 orderBy: { createdAt: 'desc' },
-    //             });
-    //             return { ...product, variants: product.variants.map((v) => v.variant), files };
-    //         })
-    //     );
-
-    //     return new BaseResponse(200, 'Produits valides avec images', productsWithFiles);
-    // }
-
-    // async getUserValidProducts(userId: string): Promise<BaseResponse<any[]>> {
-    //     const now = new Date();
-
-    //     const products = await this.prisma.product.findMany({
-    //         where: {
-    //             service: {
-    //                 subscriptions: {
-    //                     some: {
-    //                         userId,
-    //                         startDate: { lte: now },
-    //                         endDate: { gte: now },
-    //                     },
-    //                 },
-    //             },
-    //         },
-    //         include: {
-    //             service: true,
-    //             variants: { include: { variant: true } },
-    //         },
-    //     });
-
-    //     const productsWithFiles = await Promise.all(
-    //         products.map(async (product) => {
-    //             const files = await this.prisma.fileManager.findMany({
-    //                 where: { fileType: 'productFiles', targetId: product.id },
-    //                 orderBy: { createdAt: 'desc' },
-    //             });
-    //             return { ...product, variants: product.variants.map((v) => v.variant), files };
-    //         })
-    //     );
-
-    //     return new BaseResponse(200, 'Produits utilisateurs valides avec images', productsWithFiles);
-    // }
-
-    // async getAllProductsAdmin(): Promise<BaseResponse<any[]>> {
-    //     const products = await this.prisma.product.findMany({
-    //         include: {
-    //             service: true,
-    //             variants: { include: { variant: true } },
-    //         },
-    //     });
-
-    //     const productsWithFiles = await Promise.all(
-    //         products.map(async (product) => {
-    //             const files = await this.prisma.fileManager.findMany({
-    //                 where: { fileType: 'productFiles', targetId: product.id },
-    //                 orderBy: { createdAt: 'desc' },
-    //             });
-    //             return { ...product, variants: product.variants.map((v) => v.variant), files };
-    //         })
-    //     );
-
-    //     return new BaseResponse(200, 'Tous les produits admin avec images', productsWithFiles);
-    // }
-
-
     async getUserProductStats(userId: string): Promise<BaseResponse<any>> {
         const [productCount, totalStock, totalSold, orderCount] = await Promise.all([
             // Nombre total de produits créés par l'utilisateur
@@ -622,7 +585,6 @@ export class ProductService {
         });
     }
 
-
     async getOrdersAndRevenueStats(startDate?: Date, endDate?: Date): Promise<BaseResponse<any>> {
         const end = endDate ? new Date(endDate) : new Date();
         const start = startDate ? new Date(startDate) : subMonths(end, 11);
@@ -682,7 +644,6 @@ export class ProductService {
             revenue: sortedRevenue,
         });
     }
-
 
 
 }

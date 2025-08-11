@@ -78,6 +78,14 @@ export class CategoryController {
 }
 
 
+// DELETE FROM public."Category" c
+// WHERE c.id NOT IN (
+//   SELECT MIN(c2.id)
+//   FROM public."Category" c2
+//   GROUP BY c2.name
+// );
+
+
 // [
 //   { "name": "ÉLECTRONIQUE" },
 //   { "name": "VÊTEMENTS" },

@@ -213,7 +213,6 @@ export class SubscriptionService {
     }
 
 
-
     /** Souscriptions actives (non expirées) d’un utilisateur */
     async getUserSubscriptions(userId: string, params: PaginationParamsDto): Promise<BaseResponse<any>> {
         const { page, limit } = params;
@@ -286,6 +285,42 @@ export class SubscriptionService {
         return new BaseResponse(200, `Souscriptions actives de type '${serviceType}' récupérées`, data);
     }
 
+
+    /** Récupère l'ID du service lié à la dernière souscription active d'un utilisateur pour un type de service donné */
+    async getLatestActiveServiceIdByUserAndType( userId: string, serviceType: ServiceType ): Promise<BaseResponse<any>> {
+        const now = new Date();
+
+        const latestSubscription = await this.prisma.serviceSubscription.findFirst({
+            where: {
+                userId,
+                endDate: { gte: now },
+                service: {
+                    type: serviceType, // OK car typé correctement
+                },
+            },
+            select: {
+                service: {
+                    select: {
+                        id: true,
+                    },
+                },
+            },
+            orderBy: {
+                subscribedAt: 'desc',
+            },
+        });
+
+        const serviceId = latestSubscription?.service?.id || null;
+
+        return new BaseResponse(
+            200,
+            serviceId
+                ? `Dernière souscription active de type '${serviceType}' trouvée`
+                : `Aucune souscription active de type '${serviceType}' trouvée`,
+            serviceId
+        );
+    }
+
     /** Souscriptions expirées (endDate < date) */
     async getExpiredSubscriptions(userId: string, params: PaginationParamsDto, date?: Date): Promise<BaseResponse<any>> {
         const { page, limit } = params;
@@ -335,8 +370,6 @@ export class SubscriptionService {
 
         return new BaseResponse(200, 'Souscriptions expirant dans la semaine récupérées', data);
     }
-
-
 
     /** 🛒 Souscrire à un service avec période et paiement */
     async subscribeToServiceLASTE(

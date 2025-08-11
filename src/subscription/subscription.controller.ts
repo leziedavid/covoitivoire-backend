@@ -4,6 +4,7 @@ import { JwtAuthGuard } from 'src/guards/jwt-auth.guard';
 import { SubscriptionService } from './subscription.service';
 import { CreateServiceSubscriptionDto } from 'src/dto/request/service-subscription.dto';
 import { PaginationParamsDto } from 'src/dto/request/pagination-params.dto';
+import { ServiceType } from '@prisma/client';
 
 @ApiTags('Subscription Api')
 @ApiBearerAuth('access-token')
@@ -79,6 +80,21 @@ export class SubscriptionController {
         const addedById = user?.userId;
         console.log(addedById);
         return this.subscriptionService.getUserSubscriptionsByServiceType(addedById, type,params);
+    }
+
+    /** Récupère l'ID du service lié à la dernière souscription active d'un utilisateur pour un type de service donné */
+    // getLatestActiveServiceIdByUserAndType
+
+    @UseGuards(JwtAuthGuard)
+    @Get('latest-active-service-id-by-user-and-type')
+    @ApiOperation({ summary: 'Récupère l’ID du service lié à la dernière souscription active d’un utilisateur pour un type de service donné' })
+    @ApiResponse({ status: 200, description: 'Dernière souscription active trouvée' })
+    @ApiQuery({ name: 'type', required: true, description: 'Type de service (ex: livraison, restaurant, etc.)' })
+    async getLatestActiveServiceIdByUserAndType(@Req() req: any,@Query('type') type: ServiceType, ) {
+        const user = req.user as any; // typage personnalisé si disponible
+        const addedById = user?.userId;
+        console.log(addedById);
+        return this.subscriptionService.getLatestActiveServiceIdByUserAndType(addedById, type);
     }
 
     @UseGuards(JwtAuthGuard)

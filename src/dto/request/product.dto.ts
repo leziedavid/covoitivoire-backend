@@ -7,9 +7,11 @@ import {
     IsInt,
     IsArray,
     ValidateNested,
+    IsEnum,
 } from 'class-validator';
 import { Type, Transform } from 'class-transformer';
 import { Express } from 'express';
+import { VariantType } from '@prisma/client';
 
 export class ProductDto {
     @ApiProperty({ example: 'uuid' })
@@ -35,9 +37,9 @@ export class ProductDto {
     @IsInt()
     stock: number;
 
-    @ApiProperty({ example: 'TSHIRT-NOIR-M' })
-    @IsString()
-    sku: string;
+    // @ApiProperty({ example: 'TSHIRT-NOIR-M' })
+    // @IsString()
+    // sku: string;
 
     @ApiPropertyOptional({
         type: 'string',
@@ -63,6 +65,11 @@ export class ProductDto {
     @ApiProperty({ example: 'uuid-service-123' })
     @IsUUID()
     serviceId: string;
+
+    // variantType
+    @ApiProperty({ enum: VariantType, example: VariantType.COULEUR, description: 'Type de variante'})
+    @IsEnum(VariantType)
+    variantType?: VariantType;
 
     @ApiProperty({
         description: 'Liste des IDs de variantes associées',

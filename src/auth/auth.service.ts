@@ -128,9 +128,12 @@ export class AuthService {
             orderBy: { createdAt: 'desc' }, // au cas où plusieurs images
         });
 
+        // findwallet
+        const wallet = await this.prisma.wallet.findUnique({ where: { userId: user.id } });
+
         const imageUrl = file?.fileUrl || null;
 
-        const payload = { sub: user.id, role: user.role, status: user.status,name:user.name, imageUrl,partnerId:user.partnerId };
+        const payload = { sub: user.id, role: user.role, status: user.status,name:user.name, imageUrl,partnerId:user.partnerId,wallet:wallet.balance,compte:wallet.accountNumber };
         const access = this.jwtService.sign(payload, { expiresIn: '15m' });
         const refresh = this.jwtService.sign(payload, { expiresIn: '7d' });
 
@@ -154,7 +157,7 @@ export class AuthService {
         try {
             const payload = this.jwtService.verify(token);
             const access = this.jwtService.sign(
-                { sub: payload.sub, role: payload.role, status: payload.status,name: payload.name ,imageUrl: payload.imageUrl },
+                { sub: payload.sub, role: payload.role, status: payload.status,name: payload.name ,imageUrl: payload.imageUrl,partnerId:payload.partnerId,wallet:payload.balance,compte:payload.accountNumber },
                 
                 { expiresIn: '15m' },
             );
@@ -677,7 +680,7 @@ export class AuthService {
             where: { targetId: user.id },
             orderBy: { createdAt: 'desc' },
         });
-
+        
         const dto = plainToInstance(UserResponseDataDto, {
             ...user,
             imageUrl: profileImage?.fileUrl || null,

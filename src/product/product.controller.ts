@@ -62,12 +62,12 @@ export class ProductController {
     @ApiResponse({ status: 404, description: 'Produit non trouvé.' })
     async updateProduct(@Param('id') id: string, @UploadedFiles() files: { files?: Express.Multer.File[]; imageFile?: Express.Multer.File[]; },
         @Body() dto: UpdateProductDto,
-        @Req() req,
+        @Req() req: Request,
     ) {
         dto.imageFile = files.imageFile?.[0] ?? null;
         dto.files = files.files ?? null;
-        const userId = req.user?.id;
-        return this.productService.updateProduct(id, dto, userId);
+        const user = req.user as any;
+        return this.productService.updateProduct(id, dto,  user.userId);
     }
 
     @UseGuards(JwtAuthGuard)

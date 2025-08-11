@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, InternalServerErrorException } from '@ne
 import { PrismaService } from '../prisma/prisma.service';
 import { BaseResponse } from 'src/dto/request/base-response.dto';
 import { CreateVariantDto, UpdateVariantDto } from 'src/dto/request/variant.dto';
+import { Prisma, VariantType as VariantTypeEnum } from '@prisma/client';
 
 @Injectable()
 export class VariantService {
@@ -114,5 +115,56 @@ export class VariantService {
             );
         }
     }
+
+
+    // get variante by VariantType
+
+    async getVariantByVariantType(variantType: string): Promise<BaseResponse<any[]>> {
+        // Vérifier si le variantType est bien une valeur valide de l'enum
+        if (!Object.values(VariantTypeEnum).includes(variantType as VariantTypeEnum)) {
+            return new BaseResponse(400, 'Type de variante invalide', null);
+        }
+
+        const variants = await this.prisma.variant.findMany({
+            where: { variantType: variantType as VariantTypeEnum },
+            orderBy: { name: 'asc' },
+            include: {
+                produits: {
+                    select: { productId: true },
+                },
+            },
+        });
+
+        return new BaseResponse(200, 'Liste des variants récupérée', variants);
+    }
+
+        async getVariantByVariantType2(variantType: string): Promise<BaseResponse<any[]>> {
+        // Vérifier si le variantType est bien une valeur valide de l'enum
+        if (!Object.values(VariantTypeEnum).includes(variantType as VariantTypeEnum)) {
+            return new BaseResponse(400, 'Type de variante invalide', null);
+        }
+
+        const variants = await this.prisma.variant.findMany({
+            where: { variantType: variantType as VariantTypeEnum },
+            orderBy: { name: 'asc' },
+            include: {
+                produits: {
+                    select: { productId: true },
+                },
+            },
+        });
+
+        // Transformer les données
+        const transformedVariants = variants.map(variant => ({
+            id: variant.id,
+            name: variant.name,
+            value: variant.value,
+            // Ajoute ici les autres champs que tu veux exposer
+            produits: variant.produits, // ou map si tu veux structurer davantage
+        }));
+
+        return new BaseResponse(200, 'Liste des variants récupérée', transformedVariants);
+    }
+
 
 }

@@ -67,6 +67,16 @@ export class VariantController {
     async delete(@Param('id') id: string) {
         return this.variantService.deleteVariant(id);
     }
+
+    @UseGuards(JwtAuthGuard)
+    @Get('variantType/:variantType')
+    @ApiOperation({ summary: 'Récupérer les variants d\'un type' })
+    @ApiResponse({ status: 200, description: 'Liste des variants récupérée' })
+    async getVariantByVariantType(@Param('variantType') variantType: string) {
+        return this.variantService.getVariantByVariantType(variantType);
+    }
+
+
 }
 
 
