@@ -32,6 +32,9 @@ COPY package*.json ./
 # Installer uniquement les dépendances prod (pour modules natifs éventuels)
 RUN npm install --only=production
 
+# Installer OpenSSL (version 3) requis par Prisma dans Alpine 3.22+
+RUN apk add --no-cache openssl
+
 # Copier le build, node_modules et prisma depuis builder
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
@@ -39,9 +42,6 @@ COPY --from=builder /app/prisma ./prisma
 
 # Créer dossier storage (requis par l'app)
 RUN mkdir -p /app/storage
-
-# Installer la compatibilité OpenSSL 1.1 requise par Prisma
-RUN apk add --no-cache openssl1.1-compat
 
 # Installer PM2 globalement
 RUN npm install pm2 -g
@@ -55,3 +55,5 @@ EXPOSE 4000
 
 # Commande de lancement (ton entrypoint.sh)
 CMD ["/app/entrypoint.sh"]
+
+

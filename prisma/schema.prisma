@@ -1,8 +1,7 @@
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native", "linux-musl"]
+  binaryTargets   = ["native", "debian-openssl-3.0.x"]
 }
-
 
 datasource db {
   provider = "postgresql"
@@ -33,7 +32,6 @@ enum OrderStatus {
   COMPLETED
   CANCELLED
 }
-
 enum PaymentMethod {
   IMMEDIATE
   ON_ARRIVAL
