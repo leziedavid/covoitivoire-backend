@@ -7,7 +7,7 @@ services:
     ports:
       - "4000:4000"
     volumes:
-      - ./production.env:/app/.env        # montage du fichier .env modifiable
+      # - ./production.env:/app/.env        # montage du fichier .env modifiable
       - ./storage:/app/storage            # persistance des fichiers uploadés
     environment:
       NODE_ENV: production

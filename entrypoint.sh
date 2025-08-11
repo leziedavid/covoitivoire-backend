@@ -5,7 +5,7 @@ ENV_FILE=/app/.env
 if [ ! -f "$ENV_FILE" ]; then
   echo "⚠️  .env not found, creating default .env file..."
 
-  cat <<EOF > "$ENV_FILE"
+  cat > "$ENV_FILE" <<EOF
 DATABASE_URL=postgresql://microservices:microservices@db:5432/mscovoitivoire?schema=public
 JWT_SECRET=72f21bf2916454b01dd8
 JWT_EXPIRE=7d
