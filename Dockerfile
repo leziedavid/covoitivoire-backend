@@ -3,6 +3,9 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
+# Installer OpenSSL (version 3) requis par Prisma dans Alpine 3.22+
+RUN apk add --no-cache openssl
+
 # Copier package.json et package-lock.json
 COPY package*.json ./
 
@@ -55,5 +58,3 @@ EXPOSE 4000
 
 # Commande de lancement (ton entrypoint.sh)
 CMD ["/app/entrypoint.sh"]
-
-
