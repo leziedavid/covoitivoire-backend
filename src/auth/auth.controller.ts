@@ -1,7 +1,7 @@
 // src/auth/auth.controller.ts
-import {Controller,Post,Get,Patch,Delete,Body,UseGuards,Req,Param,UploadedFile,UseInterceptors, UnauthorizedException, Res, Query, UploadedFiles, ParseEnumPipe,} from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, UseGuards, Req, Param, UploadedFile, UseInterceptors, UnauthorizedException, Res, Query, UploadedFiles, ParseEnumPipe, } from '@nestjs/common';
 import { FileFieldsInterceptor, FileInterceptor } from '@nestjs/platform-express';
-import {ApiTags,ApiOperation,ApiResponse,ApiConsumes,ApiBody, ApiBearerAuth, ApiQuery,} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiConsumes, ApiBody, ApiBearerAuth, ApiQuery, } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto } from 'src/dto/request/register.dto';
 import { LoginDto } from 'src/dto/request/login.dto';
@@ -14,6 +14,7 @@ import { PaginationParamsDto } from 'src/dto/request/pagination-params.dto';
 import { UserStatus } from '@prisma/client';
 import { FilesUpdateDto } from 'src/dto/request/filesUpdatedto';
 import { UpdateProfileDto } from 'src/dto/request/update-profile.dto';
+import { reloadEnv } from 'src/utils/env-reload';
 
 
 @ApiTags('Auth Api')
@@ -24,10 +25,16 @@ export class AuthController {
     constructor(private readonly authService: AuthService) { }
 
 
+    @Post('reload-config')
+    reloadConfig() {
+        reloadEnv();
+        return { message: 'Configuration rechargée avec succès' };
+    }
+    
     @Post('register')
     @ApiOperation({ summary: 'Enregistrement d’un nouvel utilisateur' })
     @ApiConsumes('multipart/form-data')
-    @UseInterceptors( FileFieldsInterceptor([ { name: 'file', maxCount: 1 }, { name: 'carte', maxCount: 1 }, { name: 'permis', maxCount: 1 } ]))
+    @UseInterceptors(FileFieldsInterceptor([{ name: 'file', maxCount: 1 }, { name: 'carte', maxCount: 1 }, { name: 'permis', maxCount: 1 }]))
     @ApiBody({ type: RegisterDto })
     @ApiResponse({ status: 201, description: 'Utilisateur enregistré avec succès.' })
     async register(
@@ -78,7 +85,7 @@ export class AuthController {
 
     @Post('refresh')
     @ApiOperation({ summary: 'Rafraîchir le token d’accès' })
-    @ApiBody({ schema: { type: 'object',required: ['refresh_token'], properties: { refresh_token: { type: 'string' } }, },})
+    @ApiBody({ schema: { type: 'object', required: ['refresh_token'], properties: { refresh_token: { type: 'string' } }, }, })
     @ApiResponse({ status: 200, description: 'Token rafraîchi.' })
     @ApiResponse({ status: 401, description: 'Refresh token invalide.' })
     async refresh(@Body('refresh_token') token: string) {
@@ -164,10 +171,10 @@ export class AuthController {
     @ApiResponse({ status: 200, description: 'Fichiers mis à jour avec succès.' })
     @ApiResponse({ status: 401, description: 'Token ou userId manquant/invalide.' })
     @ApiConsumes('multipart/form-data')
-    @UseInterceptors( FileFieldsInterceptor([ { name: 'file', maxCount: 1 }, ]))
+    @UseInterceptors(FileFieldsInterceptor([{ name: 'file', maxCount: 1 },]))
     async updateFiles(
         @Req() req: any,
-        @UploadedFiles() files: { file?: Express.Multer.File[]},
+        @UploadedFiles() files: { file?: Express.Multer.File[] },
         @Body() dto: FilesUpdateDto) {
         dto.file = files.file?.[0] ?? null;
         return this.authService.updateFiles(req.user.userId, dto);
@@ -189,7 +196,7 @@ export class AuthController {
     @ApiResponse({ status: 200, description: 'Chauffeur affecté au véhicule' })
     @ApiResponse({ status: 404, description: 'Véhicule introuvable' })
     @ApiResponse({ status: 401, description: 'Chauffeur invalide' })
-    async assignVehicleToDriver( @Param('vehicleId') vehicleId: string, @Param('driverId') driverId: string,) {
+    async assignVehicleToDriver(@Param('vehicleId') vehicleId: string, @Param('driverId') driverId: string,) {
         return this.authService.assignVehicleToDriver(vehicleId, driverId);
     }
 
@@ -198,7 +205,7 @@ export class AuthController {
     @ApiOperation({ summary: 'Retirer un chauffeur d’un véhicule' })
     @ApiResponse({ status: 200, description: 'Chauffeur retiré du véhicule' })
     @ApiResponse({ status: 404, description: 'Véhicule introuvable' })
-    async removeDriverFromVehicle( @Param('vehicleId') vehicleId: string, @Param('driverId') driverId: string,) {
+    async removeDriverFromVehicle(@Param('vehicleId') vehicleId: string, @Param('driverId') driverId: string,) {
         return this.authService.removeDriverFromVehicle(vehicleId, driverId);
     }
 
@@ -207,7 +214,7 @@ export class AuthController {
     @Post('partner/add-driver/one')
     @ApiOperation({ summary: 'Ajouter un chauffeur par un partenaire' })
     @ApiConsumes('multipart/form-data')
-    @UseInterceptors( FileFieldsInterceptor([ { name: 'file', maxCount: 1 }, { name: 'carte', maxCount: 1 }, { name: 'permis', maxCount: 1 } ]))
+    @UseInterceptors(FileFieldsInterceptor([{ name: 'file', maxCount: 1 }, { name: 'carte', maxCount: 1 }, { name: 'permis', maxCount: 1 }]))
     @ApiBody({ type: RegisterDto })
     @ApiResponse({ status: 201, description: 'Utilisateur enregistré avec succès.' })
     async addDriverByPartner(
@@ -219,7 +226,7 @@ export class AuthController {
         dto.carte = files.carte?.[0] ?? null;
         dto.permis = files.permis?.[0] ?? null;
         // console.log('🚀 Dto:', dto,user.userId);
-        return this.authService.addDriverByPartner(user.userId,dto);
+        return this.authService.addDriverByPartner(user.userId, dto);
     }
 
 
@@ -229,8 +236,8 @@ export class AuthController {
     @ApiOperation({ summary: 'Liste des chauffeurs du partenaire connecté (ou tous si ADMIN)' })
     @ApiResponse({ status: 200, description: 'Liste des chauffeurs retournée avec succès.' })
     async getDriversByPartner(@Req() req: Request) {
-    const user = req.user as any;
-    return this.authService.getDriversByPartner(user.userId);
+        const user = req.user as any;
+        return this.authService.getDriversByPartner(user.userId);
     }
 
     @Get('profile')

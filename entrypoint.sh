@@ -6,7 +6,7 @@ if [ ! -f "$ENV_FILE" ]; then
   echo "⚠️  .env not found, creating default .env file..."
 
   cat > "$ENV_FILE" <<EOF
-DATABASE_URL=postgresql://microservices:microservices@db:5432/mscovoitivoire?schema=public
+DATABASE_URL=postgresql://microservices:microservices@postgresql:5432/mscovoitivoire?schema=public
 JWT_SECRET=72f21bf2916454b01dd8
 JWT_EXPIRE=7d
 COOKIE_EXPIRE=5
@@ -23,4 +23,5 @@ else
   echo ".env file found, using existing config."
 fi
 
-exec pm2-runtime dist/main.js --watch --watch-delay 1000 --watch-ignore node_modules
+# Lancer pm2-runtime en mode watch sur .env + dossier src
+exec pm2-runtime dist/main.js --watch --watch-delay 1000 --ignore-watch="node_modules"
