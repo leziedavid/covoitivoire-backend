@@ -57,4 +57,4 @@ RUN chmod +x /app/entrypoint.sh
 EXPOSE 4000
 
 # Commande de lancement (ton entrypoint.sh)
-CMD ["/app/entrypoint.sh"]
+# CMD ["/app/entrypoint.sh"]
