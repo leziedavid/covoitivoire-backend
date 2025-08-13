@@ -2,6 +2,13 @@
 
 ENV_FILE=/app/.env
 
+# Si .env est un dossier, on le supprime pour recréer un fichier
+if [ -d "$ENV_FILE" ]; then
+  echo "⚠️  .env est un dossier, suppression..."
+  rm -rf "$ENV_FILE"
+fi
+
+# Si le fichier .env n'existe pas, on le crée avec la config par défaut
 if [ ! -f "$ENV_FILE" ]; then
   echo "⚠️  .env not found, creating default .env file..."
 
@@ -20,7 +27,7 @@ EOF
 
   echo "✅ Default .env file created."
 else
-  echo ".env file found, using existing config."
+  echo "✅ .env file found, using existing config."
 fi
 
 # Lancer pm2-runtime en mode watch sur .env + dossier src

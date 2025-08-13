@@ -5,7 +5,7 @@ import * as multer from 'multer';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { UtilsModule } from './utils/utils.module';
-import { NotificationModule } from './utils/notification.module';  // <--- ici
+import { NotificationModule } from './utils/notification.module';
 import { VehicleModule } from './vehicle/vehicle.module';
 import { ConfigModule } from '@nestjs/config';
 import { TripModule } from './trip/trip.module';
@@ -25,11 +25,18 @@ import { MessageModule } from './message/message.module';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    MulterModule.register({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 }, }),
+    ConfigModule.forRoot({
+      isGlobal: true,
+      ignoreEnvFile: process.env.NODE_ENV === 'production', // ✅ en prod → pas de lecture fichier
+      envFilePath: process.env.NODE_ENV !== 'production' ? '.env' : undefined, // ✅ en dev → lit .env
+    }),
+    MulterModule.register({
+      storage: multer.memoryStorage(),
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
     PrismaModule,
     UtilsModule,
-    NotificationModule,  // <--- injection ici
+    NotificationModule,
     AuthModule,
     VehicleModule,
     TripModule,

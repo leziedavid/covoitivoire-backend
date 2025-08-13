@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   app:
     build:
@@ -7,10 +9,18 @@ services:
     ports:
       - "4000:4000"
     volumes:
-      - ./production.env:/app/.env   # monte ton .env local
-      - ./storage:/app/storage            # persistance des fichiers uploadés
+      - ./storage:/app/storage
     environment:
       NODE_ENV: production
+      PORT: 4000
+      DATABASE_URL: "postgresql://microservices:microservices@postgresql:5432/mscovoitivoire?schema=public"
+      JWT_SECRET: "72f21bf2916454b01dd8"
+      JWT_EXPIRE: "7d"
+      COOKIE_EXPIRE: "5"
+      CLOUDINARY_CLOUD_NAME: "dtakbf3ha"
+      CLOUDINARY_API_KEY: "196581248868223"
+      CLOUDINARY_API_SECRET: "_IN5L1lB4JNqh-t_csNWSb3z5W0"
+      FILE_STORAGE_PATH: "/app/storage"
     networks:
       - microservices-net
     restart: always
