@@ -52,4 +52,5 @@ RUN chmod +x /app/wait-for-it.sh
 EXPOSE 4000
 
 # Lancer le backend seulement après que PostgreSQL soit prêt
-CMD ["/bin/sh", "-c", "/app/wait-for-it.sh ms_pg_sql:5432 30 && node dist/main.js"]
+# ET appliquer les mises à jour du schéma Prisma sans écraser les données
+CMD ["/bin/sh", "-c", "/app/wait-for-it.sh ms_pg_sql:5432 30 && npx prisma generate && npx prisma db push && node dist/main.js"]
