@@ -1,53 +1,29 @@
-# Étape 1 : Builder - installation dev + build + prisma generate
+# Étape 1 : Builder
 FROM node:20-alpine AS builder
-
 WORKDIR /app
-
-# Installer OpenSSL requis par Prisma
 RUN apk add --no-cache openssl
-
-# Copier package.json et package-lock.json
 COPY package*.json ./
-
-# Installer toutes les dépendances (prod + dev)
 RUN npm install
-
-# Copier fichiers Prisma et sources
 COPY prisma ./prisma
 COPY src ./src
 COPY tsconfig.json ./
 COPY nest-cli.json ./
-
-# Générer le client Prisma
 RUN npx prisma generate
-
-# Builder le projet
 RUN npm run build
 
-# Étape 2 : Runner - image finale minimaliste
+# Étape 2 : Runner
 FROM node:20-alpine AS runner
-
 WORKDIR /app
-
-# Copier package.json pour info
 COPY package*.json ./
-
-# Installer uniquement les dépendances prod
 RUN npm install --only=production
-
-# Installer OpenSSL requis par Prisma
 RUN apk add --no-cache openssl
-
-# Copier le build, node_modules et prisma depuis builder
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
-
-# Créer dossier storage
+COPY wait-for-it.sh /app/wait-for-it.sh
+RUN chmod +x /app/wait-for-it.sh
 RUN mkdir -p /app/storage
-
-# Exposer port utilisé par l'app
 EXPOSE 4000
 
-# Lancer directement l'application Node
-CMD ["node", "dist/main.js"]
+# Lancer l'app seulement quand PostgreSQL est prêt
+CMD ["/app/wait-for-it.sh", "ms_pg_sql:5432", "--", "node", "dist/main.js"]
