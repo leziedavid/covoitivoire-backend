@@ -11,7 +11,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 4000
-      DATABASE_URL: "postgresql://microservices:microservices@postgresql:5432/mscovoitivoire?schema=public"
+      # DATABASE_URL: "postgresql://microservices:microservices@postgresql:5432/mscovoitivoire?schema=public"
+      DATABASE_URL: "postgresql://microservices:microservices@ms_pg_sql:5432/microservices?schema=public"
       JWT_SECRET: "72f21bf2916454b01dd8"
       JWT_EXPIRE: "7d"
       COOKIE_EXPIRE: "5"
