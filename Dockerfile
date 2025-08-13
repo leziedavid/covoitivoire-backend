@@ -34,7 +34,7 @@ RUN apk add --no-cache openssl netcat-openbsd bash
 
 # Copier package.json et installer dépendances prod
 COPY package*.json ./
-RUN npm install --only=production
+RUN npm install --omit=dev
 
 # Copier le build, node_modules et prisma depuis builder
 COPY --from=builder /app/dist ./dist

@@ -20,9 +20,9 @@ services:
       CLOUDINARY_API_SECRET: "_IN5L1lB4JNqh-t_csNWSb3z5W0"
       FILE_STORAGE_PATH: "/app/storage"
     networks:
-      - microservices-net
+      - dockerdb_microservices-net   # <-- changer ici pour le réseau PostgreSQL
     restart: always
 
 networks:
-  microservices-net:
+  dockerdb_microservices-net:
     external: true
